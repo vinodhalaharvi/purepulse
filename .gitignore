@@ -1,0 +1,14 @@
+# Go
+/bin
+/build
+*.exe
+*.log
+
+# Editor / IDE
+.idea/
+.vscode/
+
+# Environment
+.env
+
+

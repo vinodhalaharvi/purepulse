@@ -1200,8 +1200,8 @@ type EventMetadata struct {
     Duration     *time.Duration    `json:"duration,omitempty"` // Meeting duration, PR open time
     
     // Relationships
-    References   []string          `json:"references,omitempty"` // Related events, linked issues
-    
+    RelatedEventIDs []string `json:"related_event_ids,omitempty"` // Related events, linked issues    
+	
     // Platform-specific (kept for correlation)
     Extra        map[string]interface{} `json:"extra,omitempty"`
 }
