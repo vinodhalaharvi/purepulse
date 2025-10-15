@@ -21,15 +21,15 @@ type DBError struct {
 	Operation string    `json:"operation"` // "insert", "select", "update"
 	Table     string    `json:"table"`
 	Query     string    `json:"query"`
-	Error     error     `json:"error"`
+	Err       error     `json:"error"` // ← RENAMED from Error to Err
 	Timestamp time.Time `json:"timestamp"`
 	Retryable bool      `json:"retryable"`
 }
 
 // Error implements error interface
 func (dbe DBError) Error() string {
-	if dbe.Error != nil {
-		return dbe.Error.Error()
+	if dbe.Err != nil { // ← Use Err field
+		return dbe.Err.Error()
 	}
 	return "database error"
 }

@@ -3,7 +3,6 @@ package monoids
 import (
 	"github.com/vinodhalaharvi/purekernels/pkg/monoid"
 	"github.com/vinodhalaharvi/purepulse/pkg/analytics"
-	"github.com/vinodhalaharvi/purepulse/pkg/types"
 )
 
 // ============================================================================
@@ -23,30 +22,35 @@ func (m StructuredMetricsMonoid) Combine(a, b analytics.StructuredMetrics) analy
 	// Use sum monoid for counts
 	intSum := monoid.NewSumMonoid[int]()
 
-	// Use average monoid for quality scores
-	avgMonoid := monoid.NewAvgMonoid()
+	// For averages, use weighted average formula manually
+	// weighted avg = (val1*weight1 + val2*weight2) / (weight1 + weight2)
 
-	// Combine code quality as weighted average
-	codeQualityA := avgMonoid.FromValue(a.CodeQuality, a.GitHubCommits)
-	codeQualityB := avgMonoid.FromValue(b.CodeQuality, b.GitHubCommits)
-	combinedCodeQuality := avgMonoid.Combine(codeQualityA, codeQualityB)
+	// Code quality weighted by commit count
+	codeQuality := weightedAverage(
+		a.CodeQuality, float64(a.GitHubCommits),
+		b.CodeQuality, float64(b.GitHubCommits),
+	)
 
-	// Combine Jira velocity as weighted average
-	velocityA := avgMonoid.FromValue(a.JiraVelocity, a.DataPoints)
-	velocityB := avgMonoid.FromValue(b.JiraVelocity, b.DataPoints)
-	combinedVelocity := avgMonoid.Combine(velocityA, velocityB)
+	// Jira velocity weighted by data points
+	jiraVelocity := weightedAverage(
+		a.JiraVelocity, float64(a.DataPoints),
+		b.JiraVelocity, float64(b.DataPoints),
+	)
 
-	// Combine collaboration score as weighted average
-	collabA := avgMonoid.FromValue(a.CollaborationScore, a.DataPoints)
-	collabB := avgMonoid.FromValue(b.CollaborationScore, b.DataPoints)
-	combinedCollab := avgMonoid.Combine(collabA, collabB)
+	// Collaboration score weighted by data points
+	collaborationScore := weightedAverage(
+		a.CollaborationScore, float64(a.DataPoints),
+		b.CollaborationScore, float64(b.DataPoints),
+	)
 
-	// Combine active hours as sum
+	// Active hours as sum
 	activeHoursSum := a.ActiveHours + b.ActiveHours
 
 	// Peak hour: use the one with more activity
 	peakHour := a.PeakHour
-	if b.TotalActivity() > a.TotalActivity() {
+	totalActivityA := totalActivityCount(a)
+	totalActivityB := totalActivityCount(b)
+	if totalActivityB > totalActivityA {
 		peakHour = b.PeakHour
 	}
 
@@ -69,13 +73,13 @@ func (m StructuredMetricsMonoid) Combine(a, b analytics.StructuredMetrics) analy
 		GitHubComments:     intSum.Combine(a.GitHubComments, b.GitHubComments),
 		GitHubLinesAdded:   intSum.Combine(a.GitHubLinesAdded, b.GitHubLinesAdded),
 		GitHubLinesDeleted: intSum.Combine(a.GitHubLinesDeleted, b.GitHubLinesDeleted),
-		CodeQuality:        combinedCodeQuality.Value(),
+		CodeQuality:        codeQuality,
 
 		// Jira metrics (sum)
 		JiraIssuesCreated:   intSum.Combine(a.JiraIssuesCreated, b.JiraIssuesCreated),
 		JiraIssuesCompleted: intSum.Combine(a.JiraIssuesCompleted, b.JiraIssuesCompleted),
 		JiraStoryPoints:     a.JiraStoryPoints + b.JiraStoryPoints,
-		JiraVelocity:        combinedVelocity.Value(),
+		JiraVelocity:        jiraVelocity,
 		JiraComments:        intSum.Combine(a.JiraComments, b.JiraComments),
 		JiraTransitions:     intSum.Combine(a.JiraTransitions, b.JiraTransitions),
 
@@ -88,7 +92,7 @@ func (m StructuredMetricsMonoid) Combine(a, b analytics.StructuredMetrics) analy
 		// Derived metrics
 		ActiveHours:        activeHoursSum,
 		PeakHour:           peakHour,
-		CollaborationScore: combinedCollab.Value(),
+		CollaborationScore: collaborationScore,
 
 		// Metadata
 		DataPoints: intSum.Combine(a.DataPoints, b.DataPoints),
@@ -98,7 +102,20 @@ func (m StructuredMetricsMonoid) Combine(a, b analytics.StructuredMetrics) analy
 // Verify StructuredMetricsMonoid implements Monoid interface
 var _ monoid.Monoid[analytics.StructuredMetrics] = StructuredMetricsMonoid{}
 
-// TotalActivity helper for determining peak hour
-func (sm analytics.StructuredMetrics) TotalActivity() int {
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+// weightedAverage computes weighted average of two values
+func weightedAverage(val1, weight1, val2, weight2 float64) float64 {
+	totalWeight := weight1 + weight2
+	if totalWeight == 0 {
+		return 0
+	}
+	return (val1*weight1 + val2*weight2) / totalWeight
+}
+
+// totalActivityCount returns total activity count for peak hour calculation
+func totalActivityCount(sm analytics.StructuredMetrics) int {
 	return sm.SlackMessages + sm.GitHubCommits + sm.JiraIssuesCompleted + sm.ZoomMeetings
 }

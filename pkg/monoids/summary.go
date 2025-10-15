@@ -1,11 +1,8 @@
 package monoids
 
 import (
-	"time"
-
 	"github.com/vinodhalaharvi/purekernels/pkg/monoid"
 	"github.com/vinodhalaharvi/purepulse/pkg/analytics"
-	"github.com/vinodhalaharvi/purepulse/pkg/events"
 	"github.com/vinodhalaharvi/purepulse/pkg/types"
 )
 
@@ -168,20 +165,22 @@ func (AggregatedTeamMetricsMonoid) Empty() analytics.AggregatedTeamMetrics {
 // Combine merges two AggregatedTeamMetrics instances
 func (m AggregatedTeamMetricsMonoid) Combine(a, b analytics.AggregatedTeamMetrics) analytics.AggregatedTeamMetrics {
 	intSum := monoid.NewSumMonoid[int]()
-	avgMonoid := monoid.NewAvgMonoid()
 
-	// Combine averages as weighted averages
-	velocityA := avgMonoid.FromValue(a.TeamVelocity, a.TotalMembers)
-	velocityB := avgMonoid.FromValue(b.TeamVelocity, b.TotalMembers)
-	combinedVelocity := avgMonoid.Combine(velocityA, velocityB)
+	// Combine averages using weighted average
+	teamVelocity := weightedAverage(
+		a.TeamVelocity, float64(a.TotalMembers),
+		b.TeamVelocity, float64(b.TotalMembers),
+	)
 
-	collabA := avgMonoid.FromValue(a.CollaborationScore, a.TotalMembers)
-	collabB := avgMonoid.FromValue(b.CollaborationScore, b.TotalMembers)
-	combinedCollab := avgMonoid.Combine(collabA, collabB)
+	collaborationScore := weightedAverage(
+		a.CollaborationScore, float64(a.TotalMembers),
+		b.CollaborationScore, float64(b.TotalMembers),
+	)
 
-	qualityA := avgMonoid.FromValue(a.CodeQualityAvg, a.TotalMembers)
-	qualityB := avgMonoid.FromValue(b.CodeQualityAvg, b.TotalMembers)
-	combinedQuality := avgMonoid.Combine(qualityA, qualityB)
+	codeQualityAvg := weightedAverage(
+		a.CodeQualityAvg, float64(a.TotalMembers),
+		b.CodeQualityAvg, float64(b.TotalMembers),
+	)
 
 	// Merge top contributors (keeping top N)
 	contributorListMonoid := monoid.NewListMonoid[analytics.TopContributor]()
@@ -197,9 +196,9 @@ func (m AggregatedTeamMetricsMonoid) Combine(a, b analytics.AggregatedTeamMetric
 		TotalIssues:   intSum.Combine(a.TotalIssues, b.TotalIssues),
 		TotalMeetings: intSum.Combine(a.TotalMeetings, b.TotalMeetings),
 
-		TeamVelocity:       combinedVelocity.Value(),
-		CollaborationScore: combinedCollab.Value(),
-		CodeQualityAvg:     combinedQuality.Value(),
+		TeamVelocity:       teamVelocity,
+		CollaborationScore: collaborationScore,
+		CodeQualityAvg:     codeQualityAvg,
 
 		TopContributors: mergedContributors,
 	}
