@@ -43,67 +43,6 @@ func (s SelectMonoid) Build() string {
 // WHERE MONOID - Filter
 // ============================================================================
 
-// WhereMonoid represents WHERE clause as a monoid
-type WhereMonoid struct {
-	conditions []Condition
-}
-
-// Condition represents a single WHERE condition
-type Condition struct {
-	SQL    string
-	Params Params
-}
-
-// Empty returns identity (no filter)
-func (WhereMonoid) Empty() WhereMonoid {
-	return WhereMonoid{conditions: []Condition{}}
-}
-
-// Combine merges two WHERE monoids (AND composition)
-func (w WhereMonoid) Combine(other WhereMonoid) WhereMonoid {
-	return WhereMonoid{
-		conditions: append(append([]Condition{}, w.conditions...), other.conditions...),
-	}
-}
-
-// Where creates a WHERE monoid
-func Where[V any](sql string, value V) WhereMonoid {
-	return WhereMonoid{
-		conditions: []Condition{{
-			SQL:    sql,
-			Params: Params{P(value)},
-		}},
-	}
-}
-
-// WhereIn creates WHERE IN monoid
-func WhereIn[V any](column string, values []V) WhereMonoid {
-	params := make(Params, len(values))
-	placeholders := make([]string, len(values))
-
-	for i, v := range values {
-		params[i] = P(v)
-		placeholders[i] = "?"
-	}
-
-	return WhereMonoid{
-		conditions: []Condition{{
-			SQL:    fmt.Sprintf("%s IN (%s)", column, strings.Join(placeholders, ", ")),
-			Params: params,
-		}},
-	}
-}
-
-// WhereBetween creates BETWEEN monoid
-func WhereBetween[V any](column string, start, end V) WhereMonoid {
-	return WhereMonoid{
-		conditions: []Condition{{
-			SQL:    fmt.Sprintf("%s BETWEEN ? AND ?", column),
-			Params: Params{P(start), P(end)},
-		}},
-	}
-}
-
 // Build generates SQL
 func (w WhereMonoid) Build() (string, Params) {
 	if len(w.conditions) == 0 {
@@ -140,6 +79,7 @@ type JoinSpec struct {
 	Type      string // "INNER", "LEFT", "RIGHT"
 	Table     string
 	Condition string
+	Params    Params
 }
 
 // Empty returns identity (no joins)
@@ -193,17 +133,21 @@ func (j JoinMonoid) Then(other JoinMonoid) JoinMonoid {
 }
 
 // Build generates SQL
-func (j JoinMonoid) Build() string {
+// Build generates SQL and collects all params
+func (j JoinMonoid) Build() (string, Params) {
 	if len(j.joins) == 0 {
-		return ""
+		return "", Params{}
 	}
 
 	parts := make([]string, len(j.joins))
+	var allParams Params
+
 	for i, join := range j.joins {
 		parts[i] = fmt.Sprintf("%s JOIN %s ON %s", join.Type, join.Table, join.Condition)
+		allParams = allParams.Append(join.Params)
 	}
 
-	return strings.Join(parts, " ")
+	return strings.Join(parts, " "), allParams
 }
 
 // ============================================================================
@@ -478,4 +422,223 @@ func (l LimitMonoid) Build() string {
 	}
 
 	return strings.Join(parts, " ")
+}
+
+// ============================================================================
+// WHERE MONOID - Filter (FIXED)
+// ============================================================================
+
+// WhereMonoid represents WHERE clause as a monoid
+type WhereMonoid struct {
+	conditions []Condition
+}
+
+// Condition represents a single WHERE condition
+type Condition struct {
+	SQL    string
+	Params Params
+}
+
+// Empty returns identity (no filter)
+func (WhereMonoid) Empty() WhereMonoid {
+	return WhereMonoid{conditions: []Condition{}}
+}
+
+// Combine merges two WHERE monoids (AND composition)
+func (w WhereMonoid) Combine(other WhereMonoid) WhereMonoid {
+	return WhereMonoid{
+		conditions: append(append([]Condition{}, w.conditions...), other.conditions...),
+	}
+}
+
+// Where creates a WHERE monoid with "column = value" format
+func Where[V any](column string, value V) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    fmt.Sprintf("%s = ?", column),
+			Params: Params{P(value)},
+		}},
+	}
+}
+
+// WhereRaw creates a WHERE monoid with custom SQL (use when SQL has operator)
+func WhereRaw[V any](sql string, value V) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    sql,
+			Params: Params{P(value)},
+		}},
+	}
+}
+
+// WhereNoParam creates a WHERE monoid with no parameters (for IS NULL, etc)
+func WhereNoParam(sql string) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    sql,
+			Params: Params{},
+		}},
+	}
+}
+
+// WhereIn creates WHERE IN monoid
+func WhereIn[V any](column string, values []V) WhereMonoid {
+	params := make(Params, len(values))
+	placeholders := make([]string, len(values))
+
+	for i, v := range values {
+		params[i] = P(v)
+		placeholders[i] = "?"
+	}
+
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    fmt.Sprintf("%s IN (%s)", column, strings.Join(placeholders, ", ")),
+			Params: params,
+		}},
+	}
+}
+
+// WhereBetween creates BETWEEN monoid
+func WhereBetween[V any](column string, start, end V) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    fmt.Sprintf("%s BETWEEN ? AND ?", column),
+			Params: Params{P(start), P(end)},
+		}},
+	}
+}
+
+// WhereGT creates > condition
+func WhereGT[V any](column string, value V) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    fmt.Sprintf("%s > ?", column),
+			Params: Params{P(value)},
+		}},
+	}
+}
+
+// WhereGTE creates >= condition
+func WhereGTE[V any](column string, value V) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    fmt.Sprintf("%s >= ?", column),
+			Params: Params{P(value)},
+		}},
+	}
+}
+
+// WhereLT creates < condition
+func WhereLT[V any](column string, value V) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    fmt.Sprintf("%s < ?", column),
+			Params: Params{P(value)},
+		}},
+	}
+}
+
+// WhereLTE creates <= condition
+func WhereLTE[V any](column string, value V) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    fmt.Sprintf("%s <= ?", column),
+			Params: Params{P(value)},
+		}},
+	}
+}
+
+// WhereIsNull creates IS NULL condition (no parameters!)
+func WhereIsNull(column string) WhereMonoid {
+	return WhereNoParam(fmt.Sprintf("%s IS NULL", column))
+}
+
+// WhereIsNotNull creates IS NOT NULL condition (no parameters!)
+func WhereIsNotNull(column string) WhereMonoid {
+	return WhereNoParam(fmt.Sprintf("%s IS NOT NULL", column))
+}
+
+// WhereLike creates LIKE condition
+func WhereLike(column string, pattern string) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    fmt.Sprintf("%s LIKE ?", column),
+			Params: Params{P(pattern)},
+		}},
+	}
+}
+
+// ============================================================================
+// SUBQUERY MONOID - Nested Query Composition
+// ============================================================================
+
+// SubQuery wraps a Query to use as a subquery
+type SubQuery[T any] struct {
+	query Query[T]
+	alias string
+}
+
+// AsSubQuery converts a query into a subquery with an alias
+func AsSubQuery[T any](q Query[T], alias string) SubQuery[T] {
+	return SubQuery[T]{
+		query: q,
+		alias: alias,
+	}
+}
+
+// Build generates the subquery SQL
+func (sq SubQuery[T]) Build() (string, Params) {
+	sql, params := sq.query.Build()
+
+	// Convert []interface{} back to Params
+	paramsList := make(Params, len(params))
+	for i, p := range params {
+		paramsList[i] = Param{Value: p}
+	}
+
+	return fmt.Sprintf("(%s) AS %s", sql, sq.alias), paramsList
+}
+
+// ============================================================================
+// ENHANCED JOIN MONOID - Support SubQuery
+// ============================================================================
+
+// InnerJoinSubQuery joins with a subquery
+func InnerJoinSubQuery[T any](subquery SubQuery[T], condition string) JoinMonoid {
+	sql, params := subquery.Build()
+	return JoinMonoid{
+		joins: []JoinSpec{{
+			Type:      "INNER",
+			Table:     sql,
+			Condition: condition,
+			Params:    params,
+		}},
+	}
+}
+
+// LeftJoinSubQuery joins with a subquery
+func LeftJoinSubQuery[T any](subquery SubQuery[T], condition string) JoinMonoid {
+	sql, params := subquery.Build()
+	return JoinMonoid{
+		joins: []JoinSpec{{
+			Type:      "LEFT",
+			Table:     sql,
+			Condition: condition,
+			Params:    params,
+		}},
+	}
+}
+
+// RightJoinSubQuery joins with a subquery
+func RightJoinSubQuery[T any](subquery SubQuery[T], condition string) JoinMonoid {
+	sql, params := subquery.Build()
+	return JoinMonoid{
+		joins: []JoinSpec{{
+			Type:      "RIGHT",
+			Table:     sql,
+			Condition: condition,
+			Params:    params,
+		}},
+	}
 }

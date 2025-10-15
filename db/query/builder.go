@@ -55,7 +55,7 @@ func (q Query[T]) Filter(w WhereMonoid) Query[T] {
 	return q
 }
 
-// Join adds JOIN monoid
+// ApplyJoins Join adds JOIN monoid
 func (q Query[T]) ApplyJoins(j JoinMonoid) Query[T] {
 	q.joinM = q.joinM.Combine(j)
 	return q
@@ -96,6 +96,7 @@ func (q Query[T]) Having(w WhereMonoid) Query[T] {
 // ============================================================================
 
 // Build generates final SQL
+// Build generates final SQL
 func (q Query[T]) Build() (string, []interface{}) {
 	var parts []string
 	var allParams Params
@@ -117,16 +118,17 @@ func (q Query[T]) Build() (string, []interface{}) {
 	// FROM clause
 	parts = append(parts, fmt.Sprintf("FROM %s", q.table))
 
-	// JOIN clause
-	if joinSQL := q.joinM.Build(); joinSQL != "" {
+	// JOIN clause (NOW WITH PARAMS!)
+	if joinSQL, joinParams := q.joinM.Build(); joinSQL != "" {
 		parts = append(parts, joinSQL)
+		allParams = allParams.Append(joinParams)
 	}
 
 	// WHERE clause
 	if !q.whereM.IsEmpty() {
 		whereSQL, whereParams := q.whereM.Build()
 		parts = append(parts, fmt.Sprintf("WHERE %s", whereSQL))
-		allParams = append(allParams, whereParams...)
+		allParams = allParams.Append(whereParams)
 	}
 
 	// GROUP BY clause
@@ -138,7 +140,7 @@ func (q Query[T]) Build() (string, []interface{}) {
 	if !q.havingM.IsEmpty() {
 		havingSQL, havingParams := q.havingM.Build()
 		parts = append(parts, fmt.Sprintf("HAVING %s", havingSQL))
-		allParams = append(allParams, havingParams...)
+		allParams = allParams.Append(havingParams)
 	}
 
 	// ORDER BY clause
@@ -232,4 +234,27 @@ func (p Params) Values() []interface{} {
 		vals[i] = param.Value
 	}
 	return vals
+}
+
+// Append adds parameters and returns new Params (immutable style)
+func (p Params) Append(other Params) Params {
+	result := make(Params, 0, len(p)+len(other))
+	result = append(result, p...)
+	result = append(result, other...)
+	return result
+}
+
+// AppendParam adds a single parameter
+func (p Params) AppendParam(param Param) Params {
+	return append(p, param)
+}
+
+// Len returns the number of parameters
+func (p Params) Len() int {
+	return len(p)
+}
+
+// IsEmpty checks if there are no parameters
+func (p Params) IsEmpty() bool {
+	return len(p) == 0
 }
