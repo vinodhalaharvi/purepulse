@@ -134,56 +134,32 @@ CREATE INDEX idx_team_members_team ON team_members (team_id) WHERE left_at IS NU
 -- ============================================================================
 
 CREATE TABLE events (
-    id                  BIGSERIAL,
-    event_uuid          UUID DEFAULT uuid_generate_v4() NOT NULL,
-    user_id             TEXT NOT NULL,
-    source              platform_type NOT NULL,
-    type                event_type NOT NULL,
-    timestamp           TIMESTAMPTZ NOT NULL,
-    payload             JSONB NOT NULL,
-    author              TEXT,
-    channel             TEXT,
-    thread_id           TEXT,
-    parent_id           TEXT,
-    size                INTEGER,
-    duration_seconds    INTEGER,
-    participants        TEXT[],
-    tags                TEXT[],
-    related_event_ids   TEXT[],
-    ingested_at         TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-    updated_at          TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-    search_vector       tsvector GENERATED ALWAYS AS (
-        to_tsvector('english', 
+                        id                BIGSERIAL PRIMARY KEY,
+                        event_uuid        UUID        DEFAULT uuid_generate_v4() NOT NULL UNIQUE,
+                        user_id           TEXT NOT NULL,
+                        source            platform_type NOT NULL,
+                        type              event_type NOT NULL,
+                        timestamp         TIMESTAMPTZ NOT NULL,
+                        payload           JSONB NOT NULL,
+                        author            TEXT,
+                        channel           TEXT,
+                        thread_id         TEXT,
+                        parent_id         TEXT,
+                        size              INTEGER,
+                        duration_seconds  INTEGER,
+                        participants      TEXT[],
+                        tags              TEXT[],
+                        related_event_ids TEXT[],
+                        ingested_at       TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+                        updated_at        TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+                        search_vector     tsvector GENERATED ALWAYS AS (
+        to_tsvector('english',
             COALESCE(author, '') || ' ' ||
             COALESCE(channel, '') || ' ' ||
             COALESCE(payload::text, '')
         )
-    ) STORED,
-    PRIMARY KEY (id, timestamp)
-) PARTITION BY RANGE (timestamp);
-
--- Create partitions
-DO $$
-DECLARE
-    start_date DATE := DATE_TRUNC('month', NOW());
-    end_date DATE;
-    partition_name TEXT;
-BEGIN
-    FOR i IN 0..6 LOOP
-        end_date := start_date + INTERVAL '1 month';
-        partition_name := 'events_' || TO_CHAR(start_date, 'YYYY_MM');
-
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS %I PARTITION OF events
-             FOR VALUES FROM (%L) TO (%L)',
-            partition_name,
-            start_date,
-            end_date
-        );
-
-        start_date := end_date;
-    END LOOP;
-END $$;
+    ) STORED
+);
 
 -- Indexes
 CREATE INDEX idx_events_user_time ON events (user_id, timestamp DESC);
@@ -195,7 +171,6 @@ CREATE INDEX idx_events_author ON events (author) WHERE author IS NOT NULL;
 CREATE INDEX idx_events_payload_gin ON events USING GIN (payload jsonb_path_ops);
 CREATE INDEX idx_events_search ON events USING GIN (search_vector);
 CREATE INDEX idx_events_user_source_time ON events (user_id, source, timestamp DESC);
-
 -- ============================================================================
 -- TABLE: correlations
 -- ============================================================================
