@@ -26,7 +26,7 @@ func FetchAllPlatforms(
 	monoid := monoids.FetchResultMonoid{}
 
 	// Create concurrent computation for each platform
-	computations := []functor.Concurrent[events.FetchResult]{}
+	var computations []functor.Concurrent[events.FetchResult]
 
 	for platform, connector := range connectors {
 		// Capture in closure
