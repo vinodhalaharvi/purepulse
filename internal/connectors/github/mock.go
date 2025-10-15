@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/vinodhalaharvi/purepulse/internal/connectors"
 	"github.com/vinodhalaharvi/purepulse/pkg/events"
 	"github.com/vinodhalaharvi/purepulse/pkg/types"
 )
@@ -205,14 +204,6 @@ func (c *MockClient) generateMockEvents(
 	}
 
 	return mockEvents
-}
-
-// ToConnector converts to generic Connector interface
-func (c *MockClient) ToConnector() connectors.Connector {
-	return connectors.Connector{
-		Platform: types.PlatformGitHub,
-		Fetch:    c.Fetch,
-	}
 }
 
 // ============================================================================
