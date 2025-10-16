@@ -11,32 +11,40 @@ import (
 
 // SelectMonoid represents SELECT clause as a monoid
 type SelectMonoid struct {
-	columns []string
+	columns  []string
+	distinct DistinctMonoid
 }
 
-// Empty returns identity (SELECT *)
 func (SelectMonoid) Empty() SelectMonoid {
-	return SelectMonoid{columns: []string{}}
+	return SelectMonoid{
+		columns:  []string{},
+		distinct: DistinctMonoid{}.Empty(),
+	}
 }
 
-// Combine merges two SELECT monoids (union of fields)
 func (s SelectMonoid) Combine(other SelectMonoid) SelectMonoid {
 	return SelectMonoid{
-		columns: append(append([]string{}, s.columns...), other.columns...),
+		columns:  append(append([]string{}, s.columns...), other.columns...),
+		distinct: s.distinct.Combine(other.distinct),
 	}
+}
+
+func (s SelectMonoid) Build() string {
+	if len(s.columns) == 0 {
+		return "*"
+	}
+
+	prefix := ""
+	if s.distinct.enabled {
+		prefix = "DISTINCT "
+	}
+
+	return prefix + strings.Join(s.columns, ", ")
 }
 
 // Select creates a new SelectMonoid
 func Select(columns ...string) SelectMonoid {
 	return SelectMonoid{columns: columns}
-}
-
-// Build generates SQL
-func (s SelectMonoid) Build() string {
-	if len(s.columns) == 0 {
-		return "*"
-	}
-	return strings.Join(s.columns, ", ")
 }
 
 // ============================================================================
@@ -640,5 +648,33 @@ func RightJoinSubQuery[T any](subquery SubQuery[T], condition string) JoinMonoid
 			Condition: condition,
 			Params:    params,
 		}},
+	}
+}
+
+// ============================================================================
+// DISTINCT MONOID
+// ============================================================================
+
+type DistinctMonoid struct {
+	enabled bool
+}
+
+func (DistinctMonoid) Empty() DistinctMonoid {
+	return DistinctMonoid{enabled: false}
+}
+
+func (d DistinctMonoid) Combine(other DistinctMonoid) DistinctMonoid {
+	return DistinctMonoid{enabled: d.enabled || other.enabled}
+}
+
+func Distinct() DistinctMonoid {
+	return DistinctMonoid{enabled: true}
+}
+
+// SelectDistinct creates a SELECT with DISTINCT
+func SelectDistinct(columns ...string) SelectMonoid {
+	return SelectMonoid{
+		columns:  columns,
+		distinct: Distinct(),
 	}
 }

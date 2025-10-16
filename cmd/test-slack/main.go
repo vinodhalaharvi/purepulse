@@ -53,24 +53,17 @@ func main() {
 
 	// Build query using monoids
 	distinctUsersQuery := query.Table[query.User]("events").
-		Project(query.Select("DISTINCT user_id")). // Select distinct users
-		Sort(query.Desc("user_id")).               // Order for consistency
-		Bound(query.Limit(3))                      // Limit to 3
+		Project(query.SelectDistinct("user_id")).
+		Filter(query.WhereIsNotNull("user_id")).
+		Sort(query.Desc("user_id")).
+		Bound(query.Limit(3))
 
 	sql, params := distinctUsersQuery.Build()
 	fmt.Printf("Generated SQL: %s\n", sql)
 	fmt.Printf("Parameters: %v\n\n", params)
 
-	// Execute query (raw SQL since we're selecting distinct)
-	rawQuery := `
-        SELECT DISTINCT user_id 
-        FROM events 
-        WHERE user_id IS NOT NULL 
-        ORDER BY user_id DESC
-        LIMIT 3
-    `
-
-	rows, err := conn.DB.QueryContext(ctx, rawQuery)
+	// Execute query using monoid-built SQL
+	rows, err := conn.DB.QueryContext(ctx, sql, params...)
 	if err != nil {
 		log.Fatalf("Failed to query users: %v", err)
 	}
