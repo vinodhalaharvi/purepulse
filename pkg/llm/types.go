@@ -172,11 +172,6 @@ type SummaryGenerator struct {
 // PIPELINE COMPOSITION
 // ============================================================================
 
-// Pipeline represents a composable LLM pipeline
-type Pipeline[A, B any] struct {
-	steps []func(A) result.Result[B]
-}
-
 // ============================================================================
 // DATABASE PERSISTENCE
 // ============================================================================
@@ -184,4 +179,13 @@ type Pipeline[A, B any] struct {
 // SummaryRepository handles summary persistence
 type SummaryRepository struct {
 	DB *sql.DB
+}
+
+// ============================================================================
+// PIPELINE COMPOSITION
+// ============================================================================
+
+// Pipeline represents a composable LLM pipeline
+type Pipeline[A, B any] struct {
+	Run func(A) result.Result[B]
 }
