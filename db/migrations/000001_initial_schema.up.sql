@@ -445,3 +445,14 @@ BEGIN
     );
 END;
 $$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- SEED: Sample Users
+-- ============================================================================
+
+INSERT INTO users (user_id, display_name, email, active)
+VALUES
+    ('alice', 'Alice User', 'alice@example.com', true),
+    ('bob', 'Bob User', 'bob@example.com', true),
+    ('charlie', 'Charlie User', 'charlie@example.com', true)
+    ON CONFLICT (user_id) DO NOTHING;

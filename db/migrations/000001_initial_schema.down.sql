@@ -24,3 +24,4 @@ DROP EXTENSION IF EXISTS "pg_trgm";
 DROP EXTENSION IF EXISTS "btree_gin";
 DROP EXTENSION IF EXISTS "pg_stat_statements";
 
+

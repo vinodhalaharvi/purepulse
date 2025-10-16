@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/lib/pq"
 	"github.com/vinodhalaharvi/purepulse/db"
 	"github.com/vinodhalaharvi/purepulse/pkg/events"
 	"github.com/vinodhalaharvi/purepulse/pkg/llm"
@@ -212,8 +213,6 @@ func main() {
 		"insights":   summary.AISummary.Insights,
 	})
 
-	auditLogJSON, _ := json.Marshal(logs)
-
 	var summaryID string
 	err = conn.DB.QueryRowContext(ctx, insertQuery,
 		userID,
@@ -226,7 +225,7 @@ func main() {
 		summary.AIModel,
 		summary.AITokens,
 		latencyMS,
-		string(auditLogJSON), // ← Pass as JSON string
+		pq.Array(logs), // ← Use pq.Array() for TEXT[]
 		"1.0",
 	).Scan(&summaryID)
 
