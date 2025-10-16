@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/vinodhalaharvi/purekernels/pkg/result"
+	"github.com/vinodhalaharvi/purepulse/pkg/types"
 )
 
 // ============================================================================
@@ -19,15 +20,6 @@ type SummaryJSON struct {
 	Highlights []string    `json:"highlights"`
 	Insights   []string    `json:"insights"`
 	Metrics    MetricsJSON `json:"metrics"`
-}
-
-// MetricsJSON is the metrics portion of the response
-type MetricsJSON struct {
-	TotalEvents        int     `json:"total_events"`
-	PlatformsActive    int     `json:"platforms_active"`
-	ProductivityScore  float64 `json:"productivity_score"`
-	FocusScore         float64 `json:"focus_score"`
-	CollaborationScore float64 `json:"collaboration_score"`
 }
 
 // ParseDailySummary extracts structured summary from LLM response
@@ -84,36 +76,6 @@ func ParseJSON[T any](content string) result.Result[T] {
 // HELPER FUNCTIONS (Pure)
 // ============================================================================
 
-// parseSummaryJSON is the common parser for all summary types
-func parseSummaryJSON(response LLMResponse, summaryType SummaryType) result.Result[Summary] {
-	parsed := ParseJSON[SummaryJSON](response.Content)
-	if !parsed.IsOk() {
-		return result.Err[Summary](parsed.Error())
-	}
-
-	summaryJSON := parsed.Unwrap()
-
-	summary := Summary{
-		ID:         generateSummaryID(),
-		Type:       summaryType,
-		Content:    summaryJSON.Summary,
-		Highlights: summaryJSON.Highlights,
-		Insights:   summaryJSON.Insights,
-		Metrics: SummaryMetrics{
-			TotalEvents:        summaryJSON.Metrics.TotalEvents,
-			PlatformsActive:    summaryJSON.Metrics.PlatformsActive,
-			ProductivityScore:  summaryJSON.Metrics.ProductivityScore,
-			FocusScore:         summaryJSON.Metrics.FocusScore,
-			CollaborationScore: summaryJSON.Metrics.CollaborationScore,
-		},
-		GeneratedAt: response.Timestamp,
-		ModelUsed:   response.ModelVersion,
-		TokenUsage:  response.Usage,
-	}
-
-	return result.Ok(summary)
-}
-
 // cleanJSONContent removes markdown code blocks and whitespace
 func cleanJSONContent(content string) string {
 	// Remove ```json and ``` markers
@@ -127,4 +89,56 @@ func cleanJSONContent(content string) string {
 // generateSummaryID creates a unique ID for a summary
 func generateSummaryID() string {
 	return fmt.Sprintf("summary-%d", time.Now().UnixNano())
+}
+
+// parseSummaryJSON is the common parser for all summary types
+func parseSummaryJSON(response LLMResponse, summaryType SummaryType) result.Result[Summary] {
+	parsed := ParseJSON[SummaryJSON](response.Content)
+	if !parsed.IsOk() {
+		return result.Err[Summary](parsed.Error())
+	}
+
+	summaryJSON := parsed.Unwrap()
+
+	summary := Summary{
+		ID:             generateSummaryID(),
+		TimeRangeStart: time.Now(),
+		TimeRangeEnd:   time.Now().Add(24 * time.Hour),
+
+		Activity: ActivityJSON{
+			TotalEvents: summaryJSON.Metrics.TotalEvents,
+			Platforms:   []types.Platform{}, // Will be populated later
+		},
+
+		Metrics: MetricsJSON{
+			TotalEvents:        summaryJSON.Metrics.TotalEvents,
+			PlatformsActive:    summaryJSON.Metrics.PlatformsActive,
+			ProductivityScore:  summaryJSON.Metrics.ProductivityScore,
+			FocusScore:         summaryJSON.Metrics.FocusScore,
+			CollaborationScore: summaryJSON.Metrics.CollaborationScore,
+		},
+
+		Correlations: []CorrelationJSON{},
+
+		AISummary: AISummaryJSON{
+			Type:       summaryType,
+			Content:    summaryJSON.Summary,
+			Highlights: summaryJSON.Highlights,
+			Insights:   summaryJSON.Insights,
+		},
+
+		AIModel:     response.ModelVersion,
+		AITokens:    response.Usage.TotalTokens,
+		AILatencyMS: 0,
+		AuditLog:    []string{},
+		Version:     "1.0",
+		GeneratedAt: response.Timestamp,
+
+		TimeRange: types.TimeRange{
+			Start: time.Now(),
+			End:   time.Now().Add(24 * time.Hour),
+		},
+	}
+
+	return result.Ok(summary)
 }

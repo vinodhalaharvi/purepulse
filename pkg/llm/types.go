@@ -74,22 +74,6 @@ type ValidationErrorsMonoid struct{}
 // SUMMARY (Domain Model)
 // ============================================================================
 
-// Summary is the structured output from LLM
-type Summary struct {
-	ID          string
-	UserID      types.UserID
-	Type        SummaryType
-	Content     string
-	Highlights  []string
-	Insights    []string
-	Metrics     SummaryMetrics
-	TimeRange   types.TimeRange
-	Platforms   []types.Platform
-	GeneratedAt time.Time
-	ModelUsed   string
-	TokenUsage  TokenUsage
-}
-
 // SummaryType categorizes summaries
 type SummaryType string
 
@@ -99,15 +83,6 @@ const (
 	SummaryTypeProductivity SummaryType = "productivity"
 	SummaryTypeInsights     SummaryType = "insights"
 )
-
-// SummaryMetrics contains computed metrics
-type SummaryMetrics struct {
-	TotalEvents        int
-	PlatformsActive    int
-	ProductivityScore  float64
-	FocusScore         float64
-	CollaborationScore float64
-}
 
 // SummaryMonoid combines summaries
 type SummaryMonoid struct{}
@@ -189,3 +164,67 @@ type SummaryRepository struct {
 type Pipeline[A, B any] struct {
 	Run func(A) result.Result[B]
 }
+
+// Correlation placeholder (for correlations JSONB column)
+type Correlation struct {
+	Type       string  `json:"type"`
+	Confidence float64 `json:"confidence"`
+}
+
+// Summary is the structured output from LLM (DB-compatible)
+type Summary struct {
+	ID             string
+	UserID         types.UserID
+	TimeRangeStart time.Time
+	TimeRangeEnd   time.Time
+
+	// These will be stored as JSONB
+	Activity     ActivityJSON
+	Metrics      MetricsJSON
+	Correlations []CorrelationJSON
+	AISummary    AISummaryJSON
+
+	// Metadata
+	AIModel     string
+	AITokens    int
+	AILatencyMS int
+	AuditLog    []string
+	Version     string
+	GeneratedAt time.Time
+	ExpiresAt   *time.Time
+
+	// Convenience fields (not stored directly - derived from AISummary)
+	TimeRange types.TimeRange // Convenience accessor
+}
+
+// ActivityJSON for the activity JSONB column
+type ActivityJSON struct {
+	TotalEvents int              `json:"total_events"`
+	Platforms   []types.Platform `json:"platforms"`
+}
+
+// MetricsJSON for the metrics JSONB column
+type MetricsJSON struct {
+	TotalEvents        int     `json:"total_events"`
+	PlatformsActive    int     `json:"platforms_active"`
+	ProductivityScore  float64 `json:"productivity_score"`
+	FocusScore         float64 `json:"focus_score"`
+	CollaborationScore float64 `json:"collaboration_score"`
+}
+
+// CorrelationJSON for the correlations JSONB column
+type CorrelationJSON struct {
+	Type       string  `json:"type"`
+	Confidence float64 `json:"confidence"`
+}
+
+// AISummaryJSON for the ai_summary JSONB column
+type AISummaryJSON struct {
+	Type       SummaryType `json:"type"`
+	Content    string      `json:"content"`
+	Highlights []string    `json:"highlights"`
+	Insights   []string    `json:"insights"`
+}
+
+// SummaryMetrics is an alias for backwards compatibility
+type SummaryMetrics = MetricsJSON

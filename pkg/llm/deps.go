@@ -54,103 +54,6 @@ func (vm ValidationErrorsMonoid) Combine(a, b []ValidationError) []ValidationErr
 // SUMMARY MONOID
 // ============================================================================
 
-// Empty returns the identity summary
-func (sm SummaryMonoid) Empty() Summary {
-	return Summary{
-		Highlights: []string{},
-		Insights:   []string{},
-		Platforms:  []types.Platform{},
-	}
-}
-
-// Combine merges two summaries
-func (sm SummaryMonoid) Combine(a, b Summary) Summary {
-	// Take the first non-empty ID
-	id := a.ID
-	if id == "" {
-		id = b.ID
-	}
-
-	// Take the first non-empty UserID
-	userID := a.UserID
-	if userID == "" {
-		userID = b.UserID
-	}
-
-	// Take the first non-empty Type
-	summaryType := a.Type
-	if summaryType == "" {
-		summaryType = b.Type
-	}
-
-	// Concatenate content with separator
-	content := a.Content
-	if b.Content != "" {
-		if content != "" {
-			content += "\n\n---\n\n"
-		}
-		content += b.Content
-	}
-
-	// Merge highlights (deduplicate)
-	highlights := mergeUnique(a.Highlights, b.Highlights)
-
-	// Merge insights (deduplicate)
-	insights := mergeUnique(a.Insights, b.Insights)
-
-	// Merge platforms (deduplicate)
-	platforms := mergePlatforms(a.Platforms, b.Platforms)
-
-	// Combine metrics (sum counters, average scores)
-	metrics := SummaryMetrics{
-		TotalEvents:        a.Metrics.TotalEvents + b.Metrics.TotalEvents,
-		PlatformsActive:    Max(a.Metrics.PlatformsActive, b.Metrics.PlatformsActive),
-		ProductivityScore:  (a.Metrics.ProductivityScore + b.Metrics.ProductivityScore) / 2,
-		FocusScore:         (a.Metrics.FocusScore + b.Metrics.FocusScore) / 2,
-		CollaborationScore: (a.Metrics.CollaborationScore + b.Metrics.CollaborationScore) / 2,
-	}
-
-	// Take the more recent timestamp
-	generatedAt := a.GeneratedAt
-	if b.GeneratedAt.After(a.GeneratedAt) {
-		generatedAt = b.GeneratedAt
-	}
-
-	// Take the first non-empty model
-	modelUsed := a.ModelUsed
-	if modelUsed == "" {
-		modelUsed = b.ModelUsed
-	}
-
-	// Combine token usage
-	tokenUsage := TokenUsage{
-		InputTokens:  a.TokenUsage.InputTokens + b.TokenUsage.InputTokens,
-		OutputTokens: a.TokenUsage.OutputTokens + b.TokenUsage.OutputTokens,
-		TotalTokens:  a.TokenUsage.TotalTokens + b.TokenUsage.TotalTokens,
-	}
-
-	// Merge time range
-	timeRange := types.TimeRange{
-		Start: minTime(a.TimeRange.Start, b.TimeRange.Start),
-		End:   maxTime(a.TimeRange.End, b.TimeRange.End),
-	}
-
-	return Summary{
-		ID:          id,
-		UserID:      userID,
-		Type:        summaryType,
-		Content:     content,
-		Highlights:  highlights,
-		Insights:    insights,
-		Metrics:     metrics,
-		TimeRange:   timeRange,
-		Platforms:   platforms,
-		GeneratedAt: generatedAt,
-		ModelUsed:   modelUsed,
-		TokenUsage:  tokenUsage,
-	}
-}
-
 // ============================================================================
 // LLM RESPONSE LIST MONOID
 // ============================================================================
@@ -258,4 +161,141 @@ func maxTime(a, b time.Time) time.Time {
 		return a
 	}
 	return b
+}
+
+// ============================================================================
+// SUMMARY MONOID
+// ============================================================================
+
+// Empty returns the identity summary
+func (sm SummaryMonoid) Empty() Summary {
+	return Summary{
+		Activity: ActivityJSON{
+			TotalEvents: 0,
+			Platforms:   []types.Platform{},
+		},
+		Metrics: MetricsJSON{
+			TotalEvents:        0,
+			PlatformsActive:    0,
+			ProductivityScore:  0,
+			FocusScore:         0,
+			CollaborationScore: 0,
+		},
+		Correlations: []CorrelationJSON{},
+		AISummary: AISummaryJSON{
+			Type:       "",
+			Content:    "",
+			Highlights: []string{},
+			Insights:   []string{},
+		},
+		AuditLog: []string{},
+		Version:  "1.0",
+	}
+}
+
+// Combine merges two summaries
+func (sm SummaryMonoid) Combine(a, b Summary) Summary {
+	// Take the first non-empty ID
+	id := a.ID
+	if id == "" {
+		id = b.ID
+	}
+
+	// Take the first non-empty UserID
+	userID := a.UserID
+	if userID == "" {
+		userID = b.UserID
+	}
+
+	// Merge activity
+	activity := ActivityJSON{
+		TotalEvents: a.Activity.TotalEvents + b.Activity.TotalEvents,
+		Platforms:   mergePlatforms(a.Activity.Platforms, b.Activity.Platforms),
+	}
+
+	// Combine metrics (sum counters, average scores)
+	metrics := MetricsJSON{
+		TotalEvents:        a.Metrics.TotalEvents + b.Metrics.TotalEvents,
+		PlatformsActive:    Max(a.Metrics.PlatformsActive, b.Metrics.PlatformsActive),
+		ProductivityScore:  (a.Metrics.ProductivityScore + b.Metrics.ProductivityScore) / 2,
+		FocusScore:         (a.Metrics.FocusScore + b.Metrics.FocusScore) / 2,
+		CollaborationScore: (a.Metrics.CollaborationScore + b.Metrics.CollaborationScore) / 2,
+	}
+
+	// Merge correlations (deduplicate)
+	correlations := append(a.Correlations, b.Correlations...)
+
+	// Merge AI summary
+	summaryType := a.AISummary.Type
+	if summaryType == "" {
+		summaryType = b.AISummary.Type
+	}
+
+	content := a.AISummary.Content
+	if b.AISummary.Content != "" {
+		if content != "" {
+			content += "\n\n---\n\n"
+		}
+		content += b.AISummary.Content
+	}
+
+	aiSummary := AISummaryJSON{
+		Type:       summaryType,
+		Content:    content,
+		Highlights: mergeUnique(a.AISummary.Highlights, b.AISummary.Highlights),
+		Insights:   mergeUnique(a.AISummary.Insights, b.AISummary.Insights),
+	}
+
+	// Take the more recent timestamp
+	generatedAt := a.GeneratedAt
+	if b.GeneratedAt.After(a.GeneratedAt) {
+		generatedAt = b.GeneratedAt
+	}
+
+	// Take the first non-empty model
+	aiModel := a.AIModel
+	if aiModel == "" {
+		aiModel = b.AIModel
+	}
+
+	// Sum tokens
+	aiTokens := a.AITokens + b.AITokens
+
+	// Average latency
+	aiLatencyMS := (a.AILatencyMS + b.AILatencyMS) / 2
+
+	// Merge audit logs
+	auditLog := append(a.AuditLog, b.AuditLog...)
+
+	// Time range
+	timeRangeStart := a.TimeRangeStart
+	if b.TimeRangeStart.Before(a.TimeRangeStart) {
+		timeRangeStart = b.TimeRangeStart
+	}
+
+	timeRangeEnd := a.TimeRangeEnd
+	if b.TimeRangeEnd.After(a.TimeRangeEnd) {
+		timeRangeEnd = b.TimeRangeEnd
+	}
+
+	return Summary{
+		ID:             id,
+		UserID:         userID,
+		TimeRangeStart: timeRangeStart,
+		TimeRangeEnd:   timeRangeEnd,
+		Activity:       activity,
+		Metrics:        metrics,
+		Correlations:   correlations,
+		AISummary:      aiSummary,
+		AIModel:        aiModel,
+		AITokens:       aiTokens,
+		AILatencyMS:    aiLatencyMS,
+		AuditLog:       auditLog,
+		Version:        "1.0",
+		GeneratedAt:    generatedAt,
+		TimeRange: types.TimeRange{
+			Start: timeRangeStart,
+			End:   timeRangeEnd,
+		},
+	}
 }

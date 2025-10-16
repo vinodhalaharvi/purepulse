@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -90,124 +91,6 @@ func ComposePipelines[A, B, C any](
 // ============================================================================
 // SUMMARY REPOSITORY METHODS
 // ============================================================================
-
-// Save persists a summary
-func (sr *SummaryRepository) Save(ctx context.Context, summary Summary) error {
-	query := `
-        INSERT INTO summaries (
-            id, user_id, type, content, highlights, insights,
-            total_events, platforms_active, productivity_score, focus_score, collaboration_score,
-            time_range_start, time_range_end, platforms, generated_at, model_used,
-            input_tokens, output_tokens, total_tokens
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-    `
-
-	_, err := sr.DB.ExecContext(ctx, query,
-		summary.ID,
-		summary.UserID,
-		summary.Type,
-		summary.Content,
-		formatStringSlice(summary.Highlights),
-		formatStringSlice(summary.Insights),
-		summary.Metrics.TotalEvents,
-		summary.Metrics.PlatformsActive,
-		summary.Metrics.ProductivityScore,
-		summary.Metrics.FocusScore,
-		summary.Metrics.CollaborationScore,
-		summary.TimeRange.Start,
-		summary.TimeRange.End,
-		formatPlatformSlice(summary.Platforms),
-		summary.GeneratedAt,
-		summary.ModelUsed,
-		summary.TokenUsage.InputTokens,
-		summary.TokenUsage.OutputTokens,
-		summary.TokenUsage.TotalTokens,
-	)
-
-	return err
-}
-
-// SaveBatch persists multiple summaries
-func (sr *SummaryRepository) SaveBatch(ctx context.Context, summaries []Summary) error {
-	tx, err := sr.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	for _, summary := range summaries {
-		if err := sr.Save(ctx, summary); err != nil {
-			return err
-		}
-	}
-
-	return tx.Commit()
-}
-
-// FindByUser retrieves summaries for a user
-func (sr *SummaryRepository) FindByUser(
-	ctx context.Context,
-	userID types.UserID,
-	summaryType SummaryType,
-	timeRange types.TimeRange,
-) ([]Summary, error) {
-	query := `
-        SELECT id, user_id, type, content, highlights, insights,
-            total_events, platforms_active, productivity_score, focus_score, collaboration_score,
-            time_range_start, time_range_end, platforms, generated_at, model_used,
-            input_tokens, output_tokens, total_tokens
-        FROM summaries
-        WHERE user_id = $1 AND type = $2 
-            AND time_range_start >= $3 AND time_range_end <= $4
-        ORDER BY generated_at DESC
-    `
-
-	rows, err := sr.DB.QueryContext(ctx, query, userID, summaryType, timeRange.Start, timeRange.End)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	summaries := []Summary{}
-	for rows.Next() {
-		var s Summary
-		// TODO: Scan into summary
-		summaries = append(summaries, s)
-	}
-
-	return summaries, nil
-}
-
-// FindLatest gets the most recent summary
-func (sr *SummaryRepository) FindLatest(
-	ctx context.Context,
-	userID types.UserID,
-	summaryType SummaryType,
-) (*Summary, error) {
-	query := `
-        SELECT id, user_id, type, content, highlights, insights,
-            total_events, platforms_active, productivity_score, focus_score, collaboration_score,
-            time_range_start, time_range_end, platforms, generated_at, model_used,
-            input_tokens, output_tokens, total_tokens
-        FROM summaries
-        WHERE user_id = $1 AND type = $2
-        ORDER BY generated_at DESC
-        LIMIT 1
-    `
-
-	var s Summary
-	err := sr.DB.QueryRowContext(ctx, query, userID, summaryType).Scan(
-	// TODO: Scan fields
-	)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return &s, nil
-}
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -419,7 +302,7 @@ func (sg *SummaryGenerator) GenerateProductivityInsights(
 
 	summary := summaryResult.Unwrap()
 	summary.UserID = userID
-	summary.Type = SummaryTypeProductivity
+	summary.AISummary.Type = SummaryTypeProductivity
 
 	return effect.NewWriter(result.Ok(summary), logs) // ← Value first, log second
 }
@@ -466,4 +349,294 @@ func (sg *SummaryGenerator) GenerateAllSummaries(
 	}
 
 	return effect.NewWriter(result.Ok(summaries), logs) // ← Value first, log second
+}
+
+// ============================================================================
+// SUMMARY REPOSITORY METHODS
+// ============================================================================
+
+// Save persists a summary to the database
+func (sr *SummaryRepository) Save(ctx context.Context, summary Summary) error {
+	query := `
+		INSERT INTO summaries (
+			user_id,
+			time_range_start,
+			time_range_end,
+			activity,
+			metrics,
+			correlations,
+			ai_summary,
+			ai_model,
+			ai_tokens,
+			ai_latency_ms,
+			audit_log,
+			version
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		RETURNING id
+	`
+
+	// Convert to JSONB-compatible structures
+	activityJSON := map[string]interface{}{
+		"total_events": summary.Activity.TotalEvents,
+		"platforms":    summary.Activity.Platforms,
+	}
+
+	metricsJSON := map[string]interface{}{
+		"total_events":        summary.Metrics.TotalEvents,
+		"platforms_active":    summary.Metrics.PlatformsActive,
+		"productivity_score":  summary.Metrics.ProductivityScore,
+		"focus_score":         summary.Metrics.FocusScore,
+		"collaboration_score": summary.Metrics.CollaborationScore,
+	}
+
+	correlationsJSON := []interface{}{}
+
+	aiSummaryJSON := map[string]interface{}{
+		"type":       summary.AISummary.Type,
+		"content":    summary.AISummary.Content,
+		"highlights": summary.AISummary.Highlights,
+		"insights":   summary.AISummary.Insights,
+	}
+
+	auditLog := summary.AuditLog
+
+	var id string
+	err := sr.DB.QueryRowContext(ctx, query,
+		summary.UserID,
+		summary.TimeRangeStart,
+		summary.TimeRangeEnd,
+		activityJSON,
+		metricsJSON,
+		correlationsJSON,
+		aiSummaryJSON,
+		summary.AIModel,
+		summary.AITokens,
+		summary.AILatencyMS,
+		auditLog,
+		summary.Version,
+	).Scan(&id)
+
+	if err != nil {
+		return fmt.Errorf("failed to save summary: %w", err)
+	}
+
+	// Update summary with generated ID
+	summary.ID = id
+
+	return nil
+}
+
+// SaveBatch persists multiple summaries
+func (sr *SummaryRepository) SaveBatch(ctx context.Context, summaries []Summary) error {
+	tx, err := sr.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	for _, summary := range summaries {
+		if err := sr.Save(ctx, summary); err != nil {
+			return fmt.Errorf("failed to save summary in batch: %w", err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+// FindByUser retrieves summaries for a user within a time range
+func (sr *SummaryRepository) FindByUser(
+	ctx context.Context,
+	userID types.UserID,
+	summaryType SummaryType,
+	timeRange types.TimeRange,
+) ([]Summary, error) {
+	query := `
+		SELECT 
+			id,
+			user_id,
+			time_range_start,
+			time_range_end,
+			ai_summary->'type' as type,
+			ai_summary->'content' as content,
+			ai_summary->'highlights' as highlights,
+			ai_summary->'insights' as insights,
+			metrics,
+			ai_model,
+			ai_tokens,
+			generated_at
+		FROM summaries
+		WHERE user_id = $1 
+			AND ai_summary->>'type' = $2
+			AND time_range_start >= $3 
+			AND time_range_end <= $4
+		ORDER BY generated_at DESC
+	`
+
+	rows, err := sr.DB.QueryContext(ctx, query,
+		userID,
+		summaryType,
+		timeRange.Start,
+		timeRange.End,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query summaries: %w", err)
+	}
+	defer rows.Close()
+
+	summaries := []Summary{}
+	for rows.Next() {
+		var s Summary
+		var typeJSON, contentJSON, highlightsJSON, insightsJSON, metricsJSON []byte
+
+		err := rows.Scan(
+			&s.ID,
+			&s.UserID,
+			&s.TimeRangeStart,
+			&s.TimeRangeEnd,
+			&typeJSON,
+			&contentJSON,
+			&highlightsJSON,
+			&insightsJSON,
+			&metricsJSON,
+			&s.AIModel,
+			&s.AITokens,
+			&s.GeneratedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan summary: %w", err)
+		}
+
+		// Parse JSON fields into AISummary
+		var summaryTypeStr string
+		json.Unmarshal(typeJSON, &summaryTypeStr)
+		s.AISummary.Type = SummaryType(summaryTypeStr)
+
+		json.Unmarshal(contentJSON, &s.AISummary.Content)
+		json.Unmarshal(highlightsJSON, &s.AISummary.Highlights)
+		json.Unmarshal(insightsJSON, &s.AISummary.Insights)
+
+		// Parse metrics
+		var metricsMap map[string]interface{}
+		if err := json.Unmarshal(metricsJSON, &metricsMap); err == nil {
+			if totalEvents, ok := metricsMap["total_events"].(float64); ok {
+				s.Metrics.TotalEvents = int(totalEvents)
+			}
+			if platformsActive, ok := metricsMap["platforms_active"].(float64); ok {
+				s.Metrics.PlatformsActive = int(platformsActive)
+			}
+			if prodScore, ok := metricsMap["productivity_score"].(float64); ok {
+				s.Metrics.ProductivityScore = prodScore
+			}
+			if focusScore, ok := metricsMap["focus_score"].(float64); ok {
+				s.Metrics.FocusScore = focusScore
+			}
+			if collabScore, ok := metricsMap["collaboration_score"].(float64); ok {
+				s.Metrics.CollaborationScore = collabScore
+			}
+		}
+
+		// Set convenience field
+		s.TimeRange = types.TimeRange{
+			Start: s.TimeRangeStart,
+			End:   s.TimeRangeEnd,
+		}
+
+		summaries = append(summaries, s)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating summaries: %w", err)
+	}
+
+	return summaries, nil
+}
+
+// FindLatest gets the most recent summary for a user and type
+func (sr *SummaryRepository) FindLatest(
+	ctx context.Context,
+	userID types.UserID,
+	summaryType SummaryType,
+) (*Summary, error) {
+	query := `
+		SELECT 
+			id,
+			user_id,
+			time_range_start,
+			time_range_end,
+			ai_summary->'type' as type,
+			ai_summary->'content' as content,
+			ai_summary->'highlights' as highlights,
+			ai_summary->'insights' as insights,
+			metrics,
+			ai_model,
+			ai_tokens,
+			generated_at
+		FROM summaries
+		WHERE user_id = $1 
+			AND ai_summary->>'type' = $2
+		ORDER BY generated_at DESC
+		LIMIT 1
+	`
+
+	var s Summary
+	var typeJSON, contentJSON, highlightsJSON, insightsJSON, metricsJSON []byte
+
+	err := sr.DB.QueryRowContext(ctx, query, userID, summaryType).Scan(
+		&s.ID,
+		&s.UserID,
+		&s.TimeRangeStart,
+		&s.TimeRangeEnd,
+		&typeJSON,
+		&contentJSON,
+		&highlightsJSON,
+		&insightsJSON,
+		&metricsJSON,
+		&s.AIModel,
+		&s.AITokens,
+		&s.GeneratedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query latest summary: %w", err)
+	}
+
+	// Parse JSON fields into AISummary
+	var summaryTypeStr string
+	json.Unmarshal(typeJSON, &summaryTypeStr)
+	s.AISummary.Type = SummaryType(summaryTypeStr)
+
+	json.Unmarshal(contentJSON, &s.AISummary.Content)
+	json.Unmarshal(highlightsJSON, &s.AISummary.Highlights)
+	json.Unmarshal(insightsJSON, &s.AISummary.Insights)
+
+	// Parse metrics
+	var metricsMap map[string]interface{}
+	if err := json.Unmarshal(metricsJSON, &metricsMap); err == nil {
+		if totalEvents, ok := metricsMap["total_events"].(float64); ok {
+			s.Metrics.TotalEvents = int(totalEvents)
+		}
+		if platformsActive, ok := metricsMap["platforms_active"].(float64); ok {
+			s.Metrics.PlatformsActive = int(platformsActive)
+		}
+		if prodScore, ok := metricsMap["productivity_score"].(float64); ok {
+			s.Metrics.ProductivityScore = prodScore
+		}
+		if focusScore, ok := metricsMap["focus_score"].(float64); ok {
+			s.Metrics.FocusScore = focusScore
+		}
+		if collabScore, ok := metricsMap["collaboration_score"].(float64); ok {
+			s.Metrics.CollaborationScore = collabScore
+		}
+	}
+
+	// Set convenience field
+	s.TimeRange = types.TimeRange{
+		Start: s.TimeRangeStart,
+		End:   s.TimeRangeEnd,
+	}
+
+	return &s, nil
 }
