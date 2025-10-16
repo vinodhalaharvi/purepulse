@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -181,49 +182,51 @@ func main() {
         ai_latency_ms,
         audit_log,
         version
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    ) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10, $11, $12)
     RETURNING id
 `
 
-	// Convert to JSONB-compatible structures
-	activityJSON := map[string]int{
+	// Convert to JSON strings (PostgreSQL will cast to JSONB)
+	activityJSON, _ := json.Marshal(map[string]interface{}{
 		"total_events": len(eventsList),
 		"slack_count":  countEventsByPlatform(eventsList, types.PlatformSlack),
 		"github_count": countEventsByPlatform(eventsList, types.PlatformGitHub),
 		"jira_count":   countEventsByPlatform(eventsList, types.PlatformJira),
 		"zoom_count":   countEventsByPlatform(eventsList, types.PlatformZoom),
-	}
+	})
 
-	metricsJSON := map[string]interface{}{
+	metricsJSON, _ := json.Marshal(map[string]interface{}{
 		"total_events":        summary.Metrics.TotalEvents,
 		"platforms_active":    summary.Metrics.PlatformsActive,
 		"productivity_score":  summary.Metrics.ProductivityScore,
 		"focus_score":         summary.Metrics.FocusScore,
 		"collaboration_score": summary.Metrics.CollaborationScore,
-	}
+	})
 
-	correlationsJSON := []interface{}{} // Empty for now
+	correlationsJSON, _ := json.Marshal([]interface{}{})
 
-	aiSummaryJSON := map[string]interface{}{
+	aiSummaryJSON, _ := json.Marshal(map[string]interface{}{
 		"type":       summary.AISummary.Type,
 		"content":    summary.AISummary.Content,
 		"highlights": summary.AISummary.Highlights,
 		"insights":   summary.AISummary.Insights,
-	}
+	})
+
+	auditLogJSON, _ := json.Marshal(logs)
 
 	var summaryID string
 	err = conn.DB.QueryRowContext(ctx, insertQuery,
 		userID,
 		summary.TimeRangeStart,
 		summary.TimeRangeEnd,
-		activityJSON,
-		metricsJSON,
-		correlationsJSON,
-		aiSummaryJSON,
+		string(activityJSON),     // ← Pass as JSON string
+		string(metricsJSON),      // ← Pass as JSON string
+		string(correlationsJSON), // ← Pass as JSON string
+		string(aiSummaryJSON),    // ← Pass as JSON string
 		summary.AIModel,
 		summary.AITokens,
 		latencyMS,
-		logs,
+		string(auditLogJSON), // ← Pass as JSON string
 		"1.0",
 	).Scan(&summaryID)
 

@@ -133,26 +133,30 @@ CREATE INDEX idx_team_members_team ON team_members (team_id) WHERE left_at IS NU
 -- TABLE: events (partitioned)
 -- ============================================================================
 
+-- Drop the events table
+DROP TABLE IF EXISTS events CASCADE;
+
+-- Recreate with TEXT id
 CREATE TABLE events (
-                        id                BIGSERIAL PRIMARY KEY,
-                        event_uuid        UUID        DEFAULT uuid_generate_v4() NOT NULL UNIQUE,
-                        user_id           TEXT NOT NULL,
-                        source            platform_type NOT NULL,
-                        type              event_type NOT NULL,
-                        timestamp         TIMESTAMPTZ NOT NULL,
-                        payload           JSONB NOT NULL,
-                        author            TEXT,
-                        channel           TEXT,
-                        thread_id         TEXT,
-                        parent_id         TEXT,
-                        size              INTEGER,
-                        duration_seconds  INTEGER,
-                        participants      TEXT[],
-                        tags              TEXT[],
+                        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,  -- ← Changed to TEXT
+                        event_uuid UUID NOT NULL DEFAULT uuid_generate_v4(),
+                        user_id TEXT NOT NULL,
+                        source platform_type NOT NULL,
+                        type event_type NOT NULL,
+                        timestamp TIMESTAMPTZ NOT NULL,
+                        payload JSONB NOT NULL,
+                        author TEXT,
+                        channel TEXT,
+                        thread_id TEXT,
+                        parent_id TEXT,
+                        size INTEGER,
+                        duration_seconds INTEGER,
+                        participants TEXT[],
+                        tags TEXT[],
                         related_event_ids TEXT[],
-                        ingested_at       TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-                        updated_at        TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-                        search_vector     tsvector GENERATED ALWAYS AS (
+                        ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        search_vector tsvector GENERATED ALWAYS AS (
         to_tsvector('english',
             COALESCE(author, '') || ' ' ||
             COALESCE(channel, '') || ' ' ||
@@ -161,9 +165,12 @@ CREATE TABLE events (
     ) STORED
 );
 
--- Indexes
-CREATE INDEX idx_events_user_time ON events (user_id, timestamp DESC);
-CREATE INDEX idx_events_source_time ON events (source, timestamp DESC);
+-- Recreate unique index on event_uuid
+CREATE UNIQUE INDEX events_event_uuid_key ON events(event_uuid);
+
+-- Recreate all other indexes...
+CREATE INDEX idx_events_user_time ON events(user_id, timestamp DESC);
+CREATE INDEX idx_events_source_time ON events(source, timestamp DESC);
 CREATE INDEX idx_events_type_time ON events (type, timestamp DESC);
 CREATE INDEX idx_events_user_source ON events (user_id, source);
 CREATE INDEX idx_events_channel ON events (channel) WHERE channel IS NOT NULL;
