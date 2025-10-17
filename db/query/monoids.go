@@ -57,6 +57,8 @@ func (w WhereMonoid) Build() (string, []Param) {
 	return w.BuildWithIndex(1)
 }
 
+// db/query/monoids.go
+
 func (w WhereMonoid) BuildWithIndex(startIndex int) (string, []Param) {
 	if len(w.conditions) == 0 {
 		return "", []Param{}
@@ -68,16 +70,23 @@ func (w WhereMonoid) BuildWithIndex(startIndex int) (string, []Param) {
 
 	for _, cond := range w.conditions {
 		renumberedSQL := cond.SQL
-		// Replace all ? with $1, $2, $3, etc in order
-		for _, _ = range cond.Params {
-			renumberedSQL = strings.Replace(renumberedSQL, "?", fmt.Sprintf("$%d", paramIndex), 1)
-			paramIndex++
+		paramCount := len(cond.Params)
+
+		// Replace each ? with sequential $N
+		for i := 0; i < paramCount; i++ {
+			renumberedSQL = strings.Replace(
+				renumberedSQL,
+				"?",
+				fmt.Sprintf("$%d", paramIndex+i),
+				1, // Replace only the first occurrence
+			)
 		}
+
 		parts = append(parts, renumberedSQL)
 		params = append(params, cond.Params...)
+		paramIndex += paramCount // Increment by actual param count
 	}
 
-	// Return WITHOUT "WHERE" - the Query builder adds it
 	return strings.Join(parts, " AND "), params
 }
 
@@ -466,10 +475,45 @@ func (WhereMonoid) Empty() WhereMonoid {
 }
 
 // Combine merges two WHERE monoids (AND composition)
+// WhereMonoid Combine method - FIX THIS
 func (w WhereMonoid) Combine(other WhereMonoid) WhereMonoid {
-	return WhereMonoid{
-		conditions: append(append([]Condition{}, w.conditions...), other.conditions...),
+	if len(w.conditions) == 0 {
+		return other
 	}
+	if len(other.conditions) == 0 {
+		return w
+	}
+
+	// Adjust parameter indices in 'other' conditions
+	var adjustedOtherConditions []Condition
+	paramOffset := w.TotalParamCount()
+
+	for _, cond := range other.conditions {
+		adjustedSQL := cond.SQL
+		// Replace $1, $2, etc with $N+offset
+		for i := 1; i <= len(cond.Params); i++ {
+			oldPlaceholder := fmt.Sprintf("$%d", i)
+			newPlaceholder := fmt.Sprintf("$%d", i+paramOffset)
+			adjustedSQL = strings.Replace(adjustedSQL, oldPlaceholder, newPlaceholder, 1)
+		}
+		adjustedOtherConditions = append(adjustedOtherConditions, Condition{
+			SQL:    adjustedSQL,
+			Params: cond.Params,
+		})
+	}
+
+	return WhereMonoid{
+		conditions: append(append([]Condition{}, w.conditions...), adjustedOtherConditions...),
+	}
+}
+
+// Add helper method
+func (w WhereMonoid) TotalParamCount() int {
+	count := 0
+	for _, cond := range w.conditions {
+		count += len(cond.Params)
+	}
+	return count
 }
 
 // WhereRaw creates a WHERE monoid with custom SQL (use when SQL has operator)
@@ -678,7 +722,7 @@ func WhereLike[V any](column string, pattern V) WhereMonoid {
 func WhereBetween[V any](column string, start, end V) WhereMonoid {
 	return WhereMonoid{
 		conditions: []Condition{{
-			SQL:    fmt.Sprintf("%s BETWEEN $1 AND $2", column),
+			SQL:    fmt.Sprintf("%s BETWEEN ? AND ?", column), // Use ? not $1 AND $2
 			Params: Params{P(start), P(end)},
 		}},
 	}
