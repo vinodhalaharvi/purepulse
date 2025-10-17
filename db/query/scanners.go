@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/vinodhalaharvi/purepulse/pkg/events"
 	"github.com/vinodhalaharvi/purepulse/pkg/types"
 )
@@ -222,45 +223,6 @@ func scanUserSingle(row *sql.Row) (User, error) {
 	return u, err
 }
 
-// ============================================================================
-// CORRELATION SCANNERS
-// ============================================================================
-
-// CorrelationRow represents a correlation from database
-type CorrelationRow struct {
-	ID               types.CorrelationID   `json:"id"`
-	UserID           types.UserID          `json:"user_id"`
-	Type             types.CorrelationType `json:"type"`
-	SourceEventID    int64                 `json:"source_event_id"`
-	TargetEventID    int64                 `json:"target_event_id"`
-	Confidence       float64               `json:"confidence"`
-	TimeDeltaSeconds int                   `json:"time_delta_seconds"`
-	Frequency        int                   `json:"frequency"`
-	Description      string                `json:"description"`
-	DetectedAt       time.Time             `json:"detected_at"`
-}
-
-// scanCorrelation maps row to CorrelationRow
-func scanCorrelation(rows *sql.Rows) (CorrelationRow, error) {
-	var c CorrelationRow
-
-	err := rows.Scan(
-		&c.ID,
-		&c.UserID,
-		&c.Type,
-		&c.SourceEventID,
-		&c.TargetEventID,
-		&c.Confidence,
-		&c.TimeDeltaSeconds,
-		&c.Frequency,
-		&c.Description,
-		&c.DetectedAt,
-	)
-
-	return c, err
-}
-
-// ============================================================================
 // SUMMARY SCANNERS
 // ============================================================================
 
@@ -358,4 +320,130 @@ func scanBool(row *sql.Row) (bool, error) {
 	var b bool
 	err := row.Scan(&b)
 	return b, err
+}
+
+// ============================================================================
+// MATERIALIZED VIEW SCANNERS
+// ============================================================================
+
+// ============================================================================
+// DAILY ACTIVITY SCANNER
+// ============================================================================
+
+// ============================================================================
+// WEEKLY TEAM ACTIVITY SCANNER
+// ============================================================================
+
+type TeamActivityRow struct {
+	TeamID        types.TeamID
+	WeekStart     time.Time
+	Source        types.Platform
+	ActiveMembers int
+	TotalEvents   int
+	TotalSize     int
+	AvgSize       float64
+}
+
+func ScanTeamActivityRow(rows *sql.Rows) (TeamActivityRow, error) {
+	var row TeamActivityRow
+	var avgSize sql.NullFloat64
+
+	err := rows.Scan(
+		&row.TeamID,
+		&row.WeekStart,
+		&row.Source,
+		&row.ActiveMembers,
+		&row.TotalEvents,
+		&row.TotalSize,
+		&avgSize,
+	)
+
+	if avgSize.Valid {
+		row.AvgSize = avgSize.Float64
+	}
+
+	return row, err
+}
+
+// ============================================================================
+// CORRELATION SCANNER
+// ============================================================================
+
+type CorrelationRow struct {
+	UserID              types.UserID          `json:"user_id"`
+	CorrelationType     types.CorrelationType `json:"type"`
+	PatternCount        int                   `json:"pattern_count"`
+	AvgConfidence       float64               `json:"avg_confidence"`
+	AvgTimeDeltaSeconds float64               `json:"avg_time_delta_seconds"`
+	TotalFrequency      int                   `json:"total_frequency"`
+	LastDetectedAt      time.Time             `json:"last_detected_at"`
+}
+
+func ScanCorrelationRow(rows *sql.Rows) (CorrelationRow, error) {
+	var row CorrelationRow
+	var avgConfidence sql.NullFloat64
+	var avgTimeDelta sql.NullFloat64
+
+	err := rows.Scan(
+		&row.UserID,
+		&row.CorrelationType,
+		&row.PatternCount,
+		&avgConfidence,
+		&avgTimeDelta,
+		&row.TotalFrequency,
+		&row.LastDetectedAt,
+	)
+
+	if avgConfidence.Valid {
+		row.AvgConfidence = avgConfidence.Float64
+	}
+	if avgTimeDelta.Valid {
+		row.AvgTimeDeltaSeconds = avgTimeDelta.Float64
+	}
+
+	return row, err
+}
+
+type DailyActivityAgg struct {
+	UserID               types.UserID
+	Date                 time.Time
+	Source               types.Platform
+	EventType            types.EventType
+	EventCount           int
+	FirstEventAt         time.Time
+	LastEventAt          time.Time
+	Channels             []string
+	Collaborators        []string
+	TotalSize            int
+	TotalDurationSeconds int
+}
+
+func ScanDailyActivityAgg(rows *sql.Rows) (DailyActivityAgg, error) {
+	var row DailyActivityAgg
+	var channels pq.StringArray
+	var collaborators pq.StringArray
+	var totalDurationSeconds sql.NullInt64 // Handle NULL
+
+	err := rows.Scan(
+		&row.UserID,
+		&row.Date,
+		&row.Source,
+		&row.EventType,
+		&row.EventCount,
+		&row.FirstEventAt,
+		&row.LastEventAt,
+		&channels,
+		&collaborators,
+		&row.TotalSize,
+		&totalDurationSeconds, // Scan as NULL-safe
+	)
+
+	if totalDurationSeconds.Valid {
+		row.TotalDurationSeconds = int(totalDurationSeconds.Int64)
+	}
+
+	row.Channels = channels
+	row.Collaborators = collaborators
+
+	return row, err
 }

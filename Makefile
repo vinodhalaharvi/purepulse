@@ -94,3 +94,47 @@ setup: ## Initial setup (copy .env.example, start db, run migrations)
 	@echo "Setup complete!"
 
 .DEFAULT_GOAL := help
+
+helptest-weekly-metrics: ## Test weekly metrics aggregation
+	@echo "Testing weekly metrics aggregation..."
+	@. ./.env && go run ./cmd/test-weekly-metrics/main.go
+
+refresh-views: ## Refresh materialized views
+	@echo "Refreshing materialized views..."
+	@. ./.env && psql $(DATABASE_URL) -c "REFRESH MATERIALIZED VIEW CONCURRENTLY daily_user_activity;"
+	@. ./.env && psql $(DATABASE_URL) -c "REFRESH MATERIALIZED VIEW CONCURRENTLY weekly_team_activity;"
+	@. ./.env && psql $(DATABASE_URL) -c "REFRESH MATERIALIZED VIEW CONCURRENTLY user_correlation_summary;"
+	@echo "✅ Views refreshed"
+
+check-views: ## Check materialized view data
+	@. ./.env && psql $(DATABASE_URL) << EOF
+	SELECT 'daily_user_activity' as view_name, COUNT(*) as rows FROM daily_user_activity
+	UNION ALL
+	SELECT 'weekly_team_activity', COUNT(*) FROM weekly_team_activity
+	UNION ALL
+	SELECT 'user_correlation_summary', COUNT(*) FROM user_correlation_summary;
+	EOF
+
+
+test-metrics-refresh: ## Just refresh views
+	@. ./.env && psql $(DATABASE_URL) << EOF
+	REFRESH MATERIALIZED VIEW CONCURRENTLY daily_user_activity;
+	REFRESH MATERIALIZED VIEW CONCURRENTLY weekly_team_activity;
+	REFRESH MATERIALIZED VIEW CONCURRENTLY user_correlation_summary;
+	EOF
+	@echo "Views refreshed"
+
+
+
+
+test-metrics-full: ## Full diagnostic for weekly metrics
+	@echo "Running full weekly metrics diagnostic..."
+	@. ./.env && go run ./cmd/test-weekly-metrics/main.go
+
+test-metrics-psql: ## Check view structure via psql
+	@. ./.env && psql $$DATABASE_URL -c "\d daily_user_activity"
+	@. ./.env && psql $$DATABASE_URL -c "\d weekly_team_activity"
+	@. ./.env && psql $$DATABASE_URL -c "\d user_correlation_summary"
+
+test-metrics-columns: ## Show exact columns in views
+	@. ./.env && psql $$DATABASE_URL -c "SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_name IN ('daily_user_activity', 'weekly_team_activity', 'user_correlation_summary') ORDER BY table_name, ordinal_position;"
