@@ -84,7 +84,7 @@ func BuildUserAnalysisEffect(
 		Bound(query.Limit(50))
 
 	sql, params := dailyActivityBuilder.Build()
-	logs = append(logs, fmt.Sprintf("query_built: %s", sql))
+	//logs = append(logs, fmt.Sprintf("query_built: %s", sql))
 
 	// Execute query
 	userRows, err := conn.DB.QueryContext(ctx, sql, params...)

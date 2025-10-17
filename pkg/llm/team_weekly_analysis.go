@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -136,8 +137,18 @@ func AnalyzeTeamWeekly(
 	payload.Messages[0].Role = "user"
 	payload.Messages[0].Content = prompt
 
+	claudeClient := &ClaudeClient{
+		APIKey:     os.Getenv("ANTHROPIC_API_KEY"),
+		Model:      "claude-sonnet-4-20250514",
+		BaseURL:    "https://api.anthropic.com/v1", // Make sure this is set
+		MaxRetries: 3,
+		Timeout:    60 * time.Second,
+	}
+
+	fmt.Printf("DEBUG: Claude client BaseURL=%s\n", claudeClient.BaseURL)
+
 	body, _ := json.Marshal(payload)
-	req, _ := http.NewRequestWithContext(ctx, "POST", client.BaseURL+"/v1/messages", bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(ctx, "POST", client.BaseURL+"/messages", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", client.APIKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
