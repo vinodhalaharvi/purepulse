@@ -51,21 +51,34 @@ func Select(columns ...string) SelectMonoid {
 // WHERE MONOID - Filter
 // ============================================================================
 
-// Build generates SQL
-func (w WhereMonoid) Build() (string, Params) {
+// db/query/builder.go or monoids.go - in the Build() method
+
+func (w WhereMonoid) Build() (string, []Param) {
+	return w.BuildWithIndex(1)
+}
+
+func (w WhereMonoid) BuildWithIndex(startIndex int) (string, []Param) {
 	if len(w.conditions) == 0 {
-		return "", Params{}
+		return "", []Param{}
 	}
 
-	sqls := make([]string, len(w.conditions))
-	var allParams Params
+	var parts []string
+	var params []Param
+	paramIndex := startIndex
 
-	for i, cond := range w.conditions {
-		sqls[i] = cond.SQL
-		allParams = append(allParams, cond.Params...)
+	for _, cond := range w.conditions {
+		renumberedSQL := cond.SQL
+		// Replace all ? with $1, $2, $3, etc in order
+		for _, _ = range cond.Params {
+			renumberedSQL = strings.Replace(renumberedSQL, "?", fmt.Sprintf("$%d", paramIndex), 1)
+			paramIndex++
+		}
+		parts = append(parts, renumberedSQL)
+		params = append(params, cond.Params...)
 	}
 
-	return strings.Join(sqls, " AND "), allParams
+	// Return WITHOUT "WHERE" - the Query builder adds it
+	return strings.Join(parts, " AND "), params
 }
 
 // IsEmpty checks if monoid is identity
@@ -459,16 +472,6 @@ func (w WhereMonoid) Combine(other WhereMonoid) WhereMonoid {
 	}
 }
 
-// Where creates a WHERE monoid with "column = value" format
-func Where[V any](column string, value V) WhereMonoid {
-	return WhereMonoid{
-		conditions: []Condition{{
-			SQL:    fmt.Sprintf("%s = ?", column),
-			Params: Params{P(value)},
-		}},
-	}
-}
-
 // WhereRaw creates a WHERE monoid with custom SQL (use when SQL has operator)
 func WhereRaw[V any](sql string, value V) WhereMonoid {
 	return WhereMonoid{
@@ -507,56 +510,6 @@ func WhereIn[V any](column string, values []V) WhereMonoid {
 	}
 }
 
-// WhereBetween creates BETWEEN monoid
-func WhereBetween[V any](column string, start, end V) WhereMonoid {
-	return WhereMonoid{
-		conditions: []Condition{{
-			SQL:    fmt.Sprintf("%s BETWEEN ? AND ?", column),
-			Params: Params{P(start), P(end)},
-		}},
-	}
-}
-
-// WhereGT creates > condition
-func WhereGT[V any](column string, value V) WhereMonoid {
-	return WhereMonoid{
-		conditions: []Condition{{
-			SQL:    fmt.Sprintf("%s > ?", column),
-			Params: Params{P(value)},
-		}},
-	}
-}
-
-// WhereGTE creates >= condition
-func WhereGTE[V any](column string, value V) WhereMonoid {
-	return WhereMonoid{
-		conditions: []Condition{{
-			SQL:    fmt.Sprintf("%s >= ?", column),
-			Params: Params{P(value)},
-		}},
-	}
-}
-
-// WhereLT creates < condition
-func WhereLT[V any](column string, value V) WhereMonoid {
-	return WhereMonoid{
-		conditions: []Condition{{
-			SQL:    fmt.Sprintf("%s < ?", column),
-			Params: Params{P(value)},
-		}},
-	}
-}
-
-// WhereLTE creates <= condition
-func WhereLTE[V any](column string, value V) WhereMonoid {
-	return WhereMonoid{
-		conditions: []Condition{{
-			SQL:    fmt.Sprintf("%s <= ?", column),
-			Params: Params{P(value)},
-		}},
-	}
-}
-
 // WhereIsNull creates IS NULL condition (no parameters!)
 func WhereIsNull(column string) WhereMonoid {
 	return WhereNoParam(fmt.Sprintf("%s IS NULL", column))
@@ -565,16 +518,6 @@ func WhereIsNull(column string) WhereMonoid {
 // WhereIsNotNull creates IS NOT NULL condition (no parameters!)
 func WhereIsNotNull(column string) WhereMonoid {
 	return WhereNoParam(fmt.Sprintf("%s IS NOT NULL", column))
-}
-
-// WhereLike creates LIKE condition
-func WhereLike(column string, pattern string) WhereMonoid {
-	return WhereMonoid{
-		conditions: []Condition{{
-			SQL:    fmt.Sprintf("%s LIKE ?", column),
-			Params: Params{P(pattern)},
-		}},
-	}
 }
 
 // ============================================================================
@@ -676,5 +619,67 @@ func SelectDistinct(columns ...string) SelectMonoid {
 	return SelectMonoid{
 		columns:  columns,
 		distinct: Distinct(),
+	}
+}
+func Where[V any](column string, value V) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    fmt.Sprintf("%s = $1", column),
+			Params: Params{P(value)},
+		}},
+	}
+}
+
+func WhereGT[V any](column string, value V) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    fmt.Sprintf("%s > $1", column),
+			Params: Params{P(value)},
+		}},
+	}
+}
+
+func WhereGTE[V any](column string, value V) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    fmt.Sprintf("%s >= $1", column),
+			Params: Params{P(value)},
+		}},
+	}
+}
+
+func WhereLT[V any](column string, value V) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    fmt.Sprintf("%s < $1", column),
+			Params: Params{P(value)},
+		}},
+	}
+}
+
+func WhereLTE[V any](column string, value V) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    fmt.Sprintf("%s <= $1", column),
+			Params: Params{P(value)},
+		}},
+	}
+}
+
+func WhereLike[V any](column string, pattern V) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    fmt.Sprintf("%s LIKE $1", column),
+			Params: Params{P(pattern)},
+		}},
+	}
+}
+
+func WhereBetween[V any](column string, start, end V) WhereMonoid {
+	return WhereMonoid{
+		conditions: []Condition{{
+			SQL:    fmt.Sprintf("%s BETWEEN $1 AND $2", column),
+			Params: Params{P(start), P(end)},
+		}},
 	}
 }
