@@ -282,8 +282,13 @@ func main() {
 
 	beginTime := BeginTime(time.Now().AddDate(0, 0, -7))
 	endTime := EndTime(time.Now())
+	week := types.TimeRange{
+		Start: time.Time(beginTime),
+		End:   time.Time(endTime),
+	}
 
-	traverseWriter := TraverseUserAnalysesParallel(ctx, conn, claudeClient, teamMembers, beginTime, endTime)
+	// Modify TraverseUserAnalysesParallel to accept conn and save reports
+	traverseWriter := TraverseUserAnalysesParallelWithSave(ctx, conn, claudeClient, teamMembers, beginTime, endTime, week)
 	traverseRes, traverseLogs := traverseWriter.Run()
 
 	fmt.Println("Traverse logs:")
@@ -304,10 +309,10 @@ func main() {
 	fmt.Println("Step 3: Aggregating to team metrics...")
 
 	teamID := types.TeamID("team-engineering")
-	week := types.TimeRange{
-		Start: time.Time(beginTime),
-		End:   time.Time(endTime),
-	}
+	//week := types.TimeRange{
+	//	Start: time.Time(beginTime),
+	//	End:   time.Time(endTime),
+	//}
 
 	aggregateWriter := analytics.FetchAndAggregateWeeklyTeamReports(ctx, teamID, week, userReports)
 	aggregateRes, aggregateLogs := aggregateWriter.Run()
@@ -348,6 +353,14 @@ func main() {
 
 	teamReport := teamAnalysisRes.Unwrap()
 
+	// Save team report to database
+	fmt.Println("\nSaving team report to database...")
+	err = llm.SaveTeamWeeklyReport(ctx, conn, teamID, week, teamReport, claudeClient.Model, 0, 0)
+	if err != nil {
+		log.Fatalf("Failed to save team report: %v", err)
+	}
+	fmt.Println("Team report saved successfully")
+
 	// ========================================================================
 	// STEP 5: Display team report
 	// ========================================================================
@@ -380,4 +393,81 @@ func main() {
 	}
 
 	fmt.Printf("✨ Team report generated successfully!\n")
+}
+
+// TraverseUserAnalysesParallelWithSave executes analyses in parallel and saves to DB
+func TraverseUserAnalysesParallelWithSave(
+	ctx context.Context,
+	conn *db.Connection,
+	claudeClient *llm.ClaudeClient,
+	userIDs []types.UserID,
+	beginTime BeginTime,
+	endTime EndTime,
+	week types.TimeRange,
+) effect.Writer[[]string, result.Result[map[types.UserID]analytics.UserWeeklyReport]] {
+
+	logs := []string{fmt.Sprintf("traverse_started: users=%d", len(userIDs))}
+
+	type taskResult struct {
+		userID types.UserID
+		res    result.Result[UserAnalysisResult]
+		logs   []string
+	}
+
+	resultsChan := make(chan taskResult, len(userIDs))
+
+	// Execute all tasks in parallel
+	for _, userID := range userIDs {
+		go func(uid types.UserID) {
+			taskWriter := BuildUserAnalysisEffect(ctx, conn, claudeClient, uid, beginTime, endTime)
+			res, taskLogs := taskWriter.Run()
+			resultsChan <- taskResult{
+				userID: uid,
+				res:    res,
+				logs:   taskLogs,
+			}
+		}(userID)
+	}
+
+	// Collect results and save to DB
+	userReports := make(map[types.UserID]analytics.UserWeeklyReport)
+	successCount := 0
+
+	for i := 0; i < len(userIDs); i++ {
+		tr := <-resultsChan
+		logs = append(logs, tr.logs...)
+
+		if tr.res.IsOk() {
+			analysisResult := tr.res.Unwrap()
+			if analysisResult.Error == nil {
+				userReports[tr.userID] = analysisResult.Report
+				successCount++
+
+				// Save to database
+				saveWriter := llm.SaveUserWeeklyReport(ctx, conn, tr.userID, week, analysisResult.Report, claudeClient.Model, 0, 0)
+				saveRes, saveLogs := saveWriter.Run()
+				logs = append(logs, saveLogs...)
+
+				if !saveRes.IsOk() {
+					logs = append(logs, fmt.Sprintf("save_failed: user=%s, error=%v", tr.userID, saveRes.Error()))
+				}
+			}
+		}
+	}
+
+	logs = append(logs, fmt.Sprintf(
+		"traverse_completed: succeeded=%d, failed=%d, saved=%d",
+		successCount,
+		len(userIDs)-successCount,
+		len(userReports),
+	))
+
+	if len(userReports) == 0 {
+		return effect.NewWriter(
+			result.Err[map[types.UserID]analytics.UserWeeklyReport](fmt.Errorf("all analyses failed")),
+			logs,
+		)
+	}
+
+	return effect.NewWriter(result.Ok(userReports), logs)
 }

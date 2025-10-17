@@ -102,8 +102,6 @@ helptest-weekly-metrics: ## Test weekly metrics aggregation
 refresh-views: ## Refresh materialized views
 	@echo "Refreshing materialized views..."
 	@. ./.env && psql $(DATABASE_URL) -c "REFRESH MATERIALIZED VIEW CONCURRENTLY daily_user_activity;"
-	@. ./.env && psql $(DATABASE_URL) -c "REFRESH MATERIALIZED VIEW CONCURRENTLY weekly_team_activity;"
-	@. ./.env && psql $(DATABASE_URL) -c "REFRESH MATERIALIZED VIEW CONCURRENTLY user_correlation_summary;"
 	@echo "✅ Views refreshed"
 
 check-views: ## Check materialized view data
@@ -142,3 +140,8 @@ test-metrics-columns: ## Show exact columns in views
 test-team-weekly: ## Test team weekly aggregation and Claude analysis
 	@echo "Testing team weekly aggregation..."
 	@. ./.env && go run ./cmd/test-team-weekly/main.go
+
+
+test-user-weekly: ## Test all user weekly report generation
+	@echo "Testing user weekly reports..."
+	@. ./.env && go run ./cmd/test-user-weekly/main.go

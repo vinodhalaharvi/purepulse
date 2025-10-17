@@ -1,4 +1,3 @@
-// pkg/llm/weekly_analysis.go
 package llm
 
 import (
@@ -11,8 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/vinodhalaharvi/purekernels/pkg/effect"
 	"github.com/vinodhalaharvi/purekernels/pkg/result"
+	"github.com/vinodhalaharvi/purepulse/db"
 	"github.com/vinodhalaharvi/purepulse/db/query"
 	"github.com/vinodhalaharvi/purepulse/pkg/analytics"
 	"github.com/vinodhalaharvi/purepulse/pkg/types"
@@ -312,4 +313,59 @@ func AnalyzeWeeklyActivity(
 
 	logs = append(logs, "analyze_weekly_succeeded")
 	return effect.NewWriter(result.Ok(report), logs)
+}
+
+// SaveUserWeeklyReport saves the generated report to database
+// pkg/llm/weekly_analysis.go
+
+func SaveUserWeeklyReport(
+	ctx context.Context,
+	conn *db.Connection,
+	userID types.UserID,
+	week types.TimeRange,
+	report analytics.UserWeeklyReport,
+	model string,
+	tokens int,
+	latencyMS int,
+) effect.Writer[[]string, result.Result[struct{}]] {
+
+	logs := []string{fmt.Sprintf("save_report_started: user=%s", userID)}
+
+	winsJSON, _ := json.Marshal(report.Wins)
+	inProgressJSON, _ := json.Marshal(report.InProgress)
+	blockedJSON, _ := json.Marshal(report.Blocked)
+
+	query := `
+		INSERT INTO weekly_reports (user_id, week_start, week_end, executive_summary, wins, in_progress, blocked, recommendations, ai_model, ai_tokens, ai_latency_ms)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		ON CONFLICT (user_id, week_start, week_end) 
+		DO UPDATE SET 
+			executive_summary = $4,
+			wins = $5,
+			in_progress = $6,
+			blocked = $7,
+			recommendations = $8
+	`
+
+	_, err := conn.DB.ExecContext(ctx, query,
+		userID,
+		week.Start,
+		week.End,
+		report.Notes,
+		string(winsJSON),
+		string(inProgressJSON),
+		string(blockedJSON),
+		pq.Array([]string{}),
+		model,
+		tokens,
+		latencyMS,
+	)
+
+	if err != nil {
+		logs = append(logs, fmt.Sprintf("save_failed: %v", err))
+		return effect.NewWriter(result.Err[struct{}](err), logs)
+	}
+
+	logs = append(logs, "save_report_succeeded")
+	return effect.NewWriter(result.Ok(struct{}{}), logs)
 }

@@ -11,8 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/vinodhalaharvi/purekernels/pkg/effect"
 	"github.com/vinodhalaharvi/purekernels/pkg/result"
+	"github.com/vinodhalaharvi/purepulse/db"
 	"github.com/vinodhalaharvi/purepulse/pkg/analytics"
 	"github.com/vinodhalaharvi/purepulse/pkg/types"
 )
@@ -239,4 +241,49 @@ func AnalyzeTeamWeekly(
 
 	logs = append(logs, "analyze_team_weekly_succeeded")
 	return effect.NewWriter(result.Ok(report), logs)
+}
+
+// SaveTeamWeeklyReport saves team report to team_weekly_reports table
+func SaveTeamWeeklyReport(
+	ctx context.Context,
+	conn *db.Connection,
+	teamID types.TeamID,
+	week types.TimeRange,
+	teamReport analytics.TeamWeeklyReport,
+	model string,
+	tokens int,
+	latencyMS int,
+) error {
+
+	blockersJSON, _ := json.Marshal(teamReport.TeamBlockers)
+
+	query := `
+        INSERT INTO team_weekly_reports (team_id, week_start, week_end, executive_summary, velocity_analysis, collaboration_notes, team_blockers, recommendations, ai_model, ai_tokens, ai_latency_ms)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ON CONFLICT (team_id, week_start, week_end) 
+        DO UPDATE SET 
+            executive_summary = $4,
+            velocity_analysis = $5,
+            collaboration_notes = $6,
+            team_blockers = $7,
+            recommendations = $8,
+            ai_tokens = $10,
+            ai_latency_ms = $11
+    `
+
+	_, err := conn.DB.ExecContext(ctx, query,
+		teamID,
+		week.Start,
+		week.End,
+		teamReport.ExecutiveSummary,
+		teamReport.VelocityAnalysis,
+		teamReport.CollaborationNotes,
+		string(blockersJSON),
+		pq.Array(teamReport.Recommendations),
+		model,
+		tokens,
+		latencyMS,
+	)
+
+	return err
 }
