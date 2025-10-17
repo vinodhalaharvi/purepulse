@@ -1,5 +1,5 @@
 -- ============================================================================
--- EMPLOYEE ACTIVITY TRACKER - INITIAL SCHEMA (FIXED)
+-- EMPLOYEE ACTIVITY TRACKER - INITIAL SCHEMA
 -- ============================================================================
 
 -- Enable extensions first
@@ -53,23 +53,23 @@ CREATE TYPE correlation_type AS ENUM (
 );
 
 -- ============================================================================
--- TABLE: users (must come before events due to FK)
+-- TABLE: users
 -- ============================================================================
 
 CREATE TABLE users (
-    user_id             TEXT PRIMARY KEY,
-    display_name        TEXT,
-    email               TEXT,
-    timezone            TEXT DEFAULT 'UTC',
-    slack_id            TEXT,
-    github_login        TEXT,
-    jira_account_id     TEXT,
-    zoom_email          TEXT,
-    platform_identities JSONB,
-    active              BOOLEAN DEFAULT true,
-    last_activity       TIMESTAMPTZ,
-    created_at          TIMESTAMPTZ DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ DEFAULT NOW()
+                       user_id             TEXT PRIMARY KEY,
+                       display_name        TEXT,
+                       email               TEXT,
+                       timezone            TEXT DEFAULT 'UTC',
+                       slack_id            TEXT,
+                       github_login        TEXT,
+                       jira_account_id     TEXT,
+                       zoom_email          TEXT,
+                       platform_identities JSONB,
+                       active              BOOLEAN DEFAULT true,
+                       last_activity       TIMESTAMPTZ,
+                       created_at          TIMESTAMPTZ DEFAULT NOW(),
+                       updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_users_email ON users (email);
@@ -83,20 +83,19 @@ CREATE INDEX idx_users_last_activity ON users (last_activity DESC);
 -- ============================================================================
 
 CREATE TABLE teams (
-    team_id             TEXT PRIMARY KEY,
-    team_name           TEXT NOT NULL,
-    description         TEXT,
-    parent_team_id      TEXT,  -- FK added later to avoid circular reference
-    metadata            JSONB DEFAULT '{}'::jsonb,
-    created_at          TIMESTAMPTZ DEFAULT NOW(),
-    updated_at          TIMESTAMPTZ DEFAULT NOW()
+                       team_id             TEXT PRIMARY KEY,
+                       team_name           TEXT NOT NULL,
+                       description         TEXT,
+                       parent_team_id      TEXT,
+                       metadata            JSONB DEFAULT '{}'::jsonb,
+                       created_at          TIMESTAMPTZ DEFAULT NOW(),
+                       updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Add self-referencing FK after table creation
 ALTER TABLE teams
-ADD CONSTRAINT fk_teams_parent
-FOREIGN KEY (parent_team_id)
-REFERENCES teams(team_id);
+    ADD CONSTRAINT fk_teams_parent
+    FOREIGN KEY (parent_team_id)
+    REFERENCES teams(team_id);
 
 CREATE INDEX idx_teams_parent ON teams (parent_team_id) WHERE parent_team_id IS NOT NULL;
 
@@ -105,40 +104,31 @@ CREATE INDEX idx_teams_parent ON teams (parent_team_id) WHERE parent_team_id IS 
 -- ============================================================================
 
 CREATE TABLE team_members (
-    team_id             TEXT NOT NULL,
-    user_id             TEXT NOT NULL,
-    role                TEXT DEFAULT 'member',
-    joined_at           TIMESTAMPTZ DEFAULT NOW(),
-    left_at             TIMESTAMPTZ,
-    PRIMARY KEY (team_id, user_id, joined_at)
+                              team_id             TEXT NOT NULL,
+                              user_id             TEXT NOT NULL,
+                              role                TEXT DEFAULT 'member',
+                              joined_at           TIMESTAMPTZ DEFAULT NOW(),
+                              left_at             TIMESTAMPTZ,
+                              PRIMARY KEY (team_id, user_id, joined_at),
+                              CONSTRAINT fk_team_members_team
+                                  FOREIGN KEY (team_id)
+        REFERENCES teams(team_id)
+        ON DELETE CASCADE,
+                              CONSTRAINT fk_team_members_user
+                                  FOREIGN KEY (user_id)
+        REFERENCES users(user_id)
+        ON DELETE CASCADE
 );
-
--- Add FKs after table creation
-ALTER TABLE team_members
-ADD CONSTRAINT fk_team_members_team
-FOREIGN KEY (team_id)
-REFERENCES teams(team_id)
-ON DELETE CASCADE;
-
-ALTER TABLE team_members
-ADD CONSTRAINT fk_team_members_user
-FOREIGN KEY (user_id)
-REFERENCES users(user_id)
-ON DELETE CASCADE;
 
 CREATE INDEX idx_team_members_user ON team_members (user_id) WHERE left_at IS NULL;
 CREATE INDEX idx_team_members_team ON team_members (team_id) WHERE left_at IS NULL;
 
 -- ============================================================================
--- TABLE: events (partitioned)
+-- TABLE: events
 -- ============================================================================
 
--- Drop the events table
-DROP TABLE IF EXISTS events CASCADE;
-
--- Recreate with TEXT id
 CREATE TABLE events (
-                        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,  -- ← Changed to TEXT
+                        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
                         event_uuid UUID NOT NULL DEFAULT uuid_generate_v4(),
                         user_id TEXT NOT NULL,
                         source platform_type NOT NULL,
@@ -162,13 +152,14 @@ CREATE TABLE events (
             COALESCE(channel, '') || ' ' ||
             COALESCE(payload::text, '')
         )
-    ) STORED
+    ) STORED,
+                        CONSTRAINT fk_events_user
+                            FOREIGN KEY (user_id)
+        REFERENCES users(user_id)
+        ON DELETE CASCADE
 );
 
--- Recreate unique index on event_uuid
 CREATE UNIQUE INDEX events_event_uuid_key ON events(event_uuid);
-
--- Recreate all other indexes...
 CREATE INDEX idx_events_user_time ON events(user_id, timestamp DESC);
 CREATE INDEX idx_events_source_time ON events(source, timestamp DESC);
 CREATE INDEX idx_events_type_time ON events (type, timestamp DESC);
@@ -178,30 +169,29 @@ CREATE INDEX idx_events_author ON events (author) WHERE author IS NOT NULL;
 CREATE INDEX idx_events_payload_gin ON events USING GIN (payload jsonb_path_ops);
 CREATE INDEX idx_events_search ON events USING GIN (search_vector);
 CREATE INDEX idx_events_user_source_time ON events (user_id, source, timestamp DESC);
+
 -- ============================================================================
 -- TABLE: correlations
 -- ============================================================================
 
 CREATE TABLE correlations (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id             TEXT NOT NULL,
-    type                correlation_type NOT NULL,
-    source_event_id     BIGINT NOT NULL,
-    target_event_id     BIGINT NOT NULL,
-    confidence          NUMERIC(3, 2) NOT NULL CHECK (confidence BETWEEN 0 AND 1),
-    time_delta_seconds  INTEGER NOT NULL,
-    frequency           INTEGER DEFAULT 1,
-    description         TEXT,
-    metadata            JSONB DEFAULT '{}'::jsonb,
-    detected_at         TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE (user_id, type, source_event_id, target_event_id)
+                              id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                              user_id             TEXT NOT NULL,
+                              type                correlation_type NOT NULL,
+                              source_event_id     BIGINT NOT NULL,
+                              target_event_id     BIGINT NOT NULL,
+                              confidence          NUMERIC(3, 2) NOT NULL CHECK (confidence BETWEEN 0 AND 1),
+                              time_delta_seconds  INTEGER NOT NULL,
+                              frequency           INTEGER DEFAULT 1,
+                              description         TEXT,
+                              metadata            JSONB DEFAULT '{}'::jsonb,
+                              detected_at         TIMESTAMPTZ DEFAULT NOW(),
+                              CONSTRAINT fk_correlations_user
+                                  FOREIGN KEY (user_id)
+        REFERENCES users(user_id)
+        ON DELETE CASCADE,
+                              UNIQUE (user_id, type, source_event_id, target_event_id)
 );
-
--- Add FK after table creation
-ALTER TABLE correlations
-ADD CONSTRAINT fk_correlations_user
-FOREIGN KEY (user_id)
-REFERENCES users(user_id);
 
 CREATE INDEX idx_correlations_user ON correlations (user_id, detected_at DESC);
 CREATE INDEX idx_correlations_type ON correlations (type, confidence DESC);
@@ -214,28 +204,27 @@ CREATE INDEX idx_correlations_target_event ON correlations (target_event_id);
 -- ============================================================================
 
 CREATE TABLE summaries (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id             TEXT NOT NULL,
-    time_range_start    TIMESTAMPTZ NOT NULL,
-    time_range_end      TIMESTAMPTZ NOT NULL,
-    activity            JSONB NOT NULL,
-    metrics             JSONB NOT NULL,
-    correlations        JSONB NOT NULL,
-    ai_summary          JSONB,
-    ai_model            TEXT,
-    ai_tokens           INTEGER,
-    ai_latency_ms       INTEGER,
-    audit_log           TEXT[],
-    version             TEXT DEFAULT '1.0',
-    generated_at        TIMESTAMPTZ DEFAULT NOW(),
-    expires_at          TIMESTAMPTZ,
-    UNIQUE (user_id, time_range_start, time_range_end)
+                           id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                           user_id             TEXT NOT NULL,
+                           time_range_start    TIMESTAMPTZ NOT NULL,
+                           time_range_end      TIMESTAMPTZ NOT NULL,
+                           activity            JSONB NOT NULL,
+                           metrics             JSONB NOT NULL,
+                           correlations        JSONB NOT NULL,
+                           ai_summary          JSONB,
+                           ai_model            TEXT,
+                           ai_tokens           INTEGER,
+                           ai_latency_ms       INTEGER,
+                           audit_log           TEXT[],
+                           version             TEXT DEFAULT '1.0',
+                           generated_at        TIMESTAMPTZ DEFAULT NOW(),
+                           expires_at          TIMESTAMPTZ,
+                           CONSTRAINT fk_summaries_user
+                               FOREIGN KEY (user_id)
+        REFERENCES users(user_id)
+        ON DELETE CASCADE,
+                           UNIQUE (user_id, time_range_start, time_range_end)
 );
-
-ALTER TABLE summaries
-ADD CONSTRAINT fk_summaries_user
-FOREIGN KEY (user_id)
-REFERENCES users(user_id);
 
 CREATE INDEX idx_summaries_user_time ON summaries (user_id, time_range_start DESC, time_range_end DESC);
 CREATE INDEX idx_summaries_expires ON summaries (expires_at) WHERE expires_at IS NOT NULL;
@@ -246,93 +235,129 @@ CREATE INDEX idx_summaries_generated ON summaries (generated_at DESC);
 -- ============================================================================
 
 CREATE TABLE team_summaries (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    team_id             TEXT NOT NULL,
-    time_range_start    TIMESTAMPTZ NOT NULL,
-    time_range_end      TIMESTAMPTZ NOT NULL,
-    member_summaries    JSONB NOT NULL,
-    aggregated_metrics  JSONB NOT NULL,
-    generated_at        TIMESTAMPTZ DEFAULT NOW(),
-    expires_at          TIMESTAMPTZ,
-    UNIQUE (team_id, time_range_start, time_range_end)
+                                id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                                team_id             TEXT NOT NULL,
+                                time_range_start    TIMESTAMPTZ NOT NULL,
+                                time_range_end      TIMESTAMPTZ NOT NULL,
+                                member_summaries    JSONB NOT NULL,
+                                aggregated_metrics  JSONB NOT NULL,
+                                generated_at        TIMESTAMPTZ DEFAULT NOW(),
+                                expires_at          TIMESTAMPTZ,
+                                CONSTRAINT fk_team_summaries_team
+                                    FOREIGN KEY (team_id)
+        REFERENCES teams(team_id)
+        ON DELETE CASCADE,
+                                UNIQUE (team_id, time_range_start, time_range_end)
 );
-
-ALTER TABLE team_summaries
-ADD CONSTRAINT fk_team_summaries_team
-FOREIGN KEY (team_id)
-REFERENCES teams(team_id);
 
 CREATE INDEX idx_team_summaries_team_time ON team_summaries (team_id, time_range_start DESC);
 CREATE INDEX idx_team_summaries_expires ON team_summaries (expires_at) WHERE expires_at IS NOT NULL;
 
 -- ============================================================================
--- TABLE: fetch_metadata
+-- TABLE: weekly_metrics
 -- ============================================================================
 
-CREATE TABLE fetch_metadata (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id             TEXT NOT NULL,
-    source              platform_type NOT NULL,
-    time_range_start    TIMESTAMPTZ NOT NULL,
-    time_range_end      TIMESTAMPTZ NOT NULL,
-    events_fetched      INTEGER DEFAULT 0,
-    errors              JSONB,
-    api_calls           INTEGER DEFAULT 0,
-    latency_ms          INTEGER,
-    cached              BOOLEAN DEFAULT false,
-    rate_limited        BOOLEAN DEFAULT false,
-    fetched_at          TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE weekly_metrics (
+                                id                          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                                user_id                     TEXT NOT NULL,
+                                week_start                  TIMESTAMPTZ NOT NULL,
+                                week_end                    TIMESTAMPTZ NOT NULL,
+                                commits                     INTEGER DEFAULT 0,
+                                commits_avg_quality         NUMERIC(3, 2) DEFAULT 0.0,
+                                prs_opened                  INTEGER DEFAULT 0,
+                                prs_reviewed                INTEGER DEFAULT 0,
+                                review_turnaround_ms        INTEGER DEFAULT 0,
+                                lines_added                 INTEGER DEFAULT 0,
+                                lines_deleted               INTEGER DEFAULT 0,
+                                tickets_completed           INTEGER DEFAULT 0,
+                                tickets_in_progress         INTEGER DEFAULT 0,
+                                tickets_blocked             INTEGER DEFAULT 0,
+                                avg_completion_days         NUMERIC(5, 2) DEFAULT 0.0,
+                                story_points_completed      NUMERIC(8, 2) DEFAULT 0.0,
+                                slack_messages              INTEGER DEFAULT 0,
+                                channels_active             TEXT[] DEFAULT '{}',
+                                pair_programming_hours      NUMERIC(5, 2) DEFAULT 0.0,
+                                help_questions_answered     INTEGER DEFAULT 0,
+                                total_meeting_hours         NUMERIC(5, 2) DEFAULT 0.0,
+                                deep_work_hours             NUMERIC(5, 2) DEFAULT 0.0,
+                                context_switches            INTEGER DEFAULT 0,
+                                peak_activity_hours         INTEGER[] DEFAULT '{}',
+                                collaboration_score         NUMERIC(3, 2) DEFAULT 0.0,
+                                productivity_score          NUMERIC(3, 2) DEFAULT 0.0,
+                                generated_at                TIMESTAMPTZ DEFAULT NOW(),
+                                updated_at                  TIMESTAMPTZ DEFAULT NOW(),
+                                CONSTRAINT fk_weekly_metrics_user
+                                    FOREIGN KEY (user_id)
+        REFERENCES users(user_id)
+        ON DELETE CASCADE,
+                                UNIQUE (user_id, week_start, week_end)
 );
 
-CREATE INDEX idx_fetch_metadata_user_source ON fetch_metadata (user_id, source, fetched_at DESC);
-CREATE INDEX idx_fetch_metadata_errors ON fetch_metadata (source, fetched_at DESC) WHERE errors IS NOT NULL;
+CREATE INDEX idx_weekly_metrics_user_week ON weekly_metrics (user_id, week_start DESC);
+CREATE INDEX idx_weekly_metrics_week ON weekly_metrics (week_start DESC);
 
 -- ============================================================================
--- TABLE: audit_log
+-- TABLE: team_weekly_metrics
 -- ============================================================================
 
-CREATE TABLE audit_log (
-    id                  BIGSERIAL PRIMARY KEY,
-    operation           TEXT NOT NULL,
-    user_id             TEXT,
-    table_name          TEXT,
-    record_id           TEXT,
-    changes             JSONB,
-    metadata            JSONB DEFAULT '{}'::jsonb,
-    request_id          UUID,
-    ip_address          INET,
-    user_agent          TEXT,
-    timestamp           TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE team_weekly_metrics (
+                                     id                          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                                     team_id                     TEXT NOT NULL,
+                                     week_start                  TIMESTAMPTZ NOT NULL,
+                                     week_end                    TIMESTAMPTZ NOT NULL,
+                                     total_velocity              INTEGER DEFAULT 0,
+                                     velocity_trend              NUMERIC(5, 2) DEFAULT 0.0,
+                                     blocker_count               INTEGER DEFAULT 0,
+                                     avg_blocker_days            NUMERIC(5, 2) DEFAULT 0.0,
+                                     team_collaboration_score    NUMERIC(3, 2) DEFAULT 0.0,
+                                     top_collaborators           TEXT[] DEFAULT '{}',
+                                     key_blockers                TEXT[] DEFAULT '{}',
+                                     mentorship_pairs            JSONB DEFAULT '[]'::jsonb,
+                                     generated_at                TIMESTAMPTZ DEFAULT NOW(),
+                                     updated_at                  TIMESTAMPTZ DEFAULT NOW(),
+                                     CONSTRAINT fk_team_weekly_metrics_team
+                                         FOREIGN KEY (team_id)
+        REFERENCES teams(team_id)
+        ON DELETE CASCADE,
+                                     UNIQUE (team_id, week_start, week_end)
 );
 
-CREATE INDEX idx_audit_log_timestamp ON audit_log (timestamp DESC);
-CREATE INDEX idx_audit_log_operation ON audit_log (operation, timestamp DESC);
-CREATE INDEX idx_audit_log_user ON audit_log (user_id, timestamp DESC) WHERE user_id IS NOT NULL;
-CREATE INDEX idx_audit_log_request ON audit_log (request_id) WHERE request_id IS NOT NULL;
+CREATE INDEX idx_team_weekly_metrics_team_week ON team_weekly_metrics (team_id, week_start DESC);
+CREATE INDEX idx_team_weekly_metrics_week ON team_weekly_metrics (week_start DESC);
 
 -- ============================================================================
--- TABLE: api_keys
+-- TABLE: weekly_reports
 -- ============================================================================
 
-CREATE TABLE api_keys (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    platform            platform_type NOT NULL,
-    key_name            TEXT NOT NULL,
-    encrypted_token     TEXT NOT NULL,
-    encryption_key_id   TEXT NOT NULL,
-    workspace_id        TEXT,
-    scopes              TEXT[],
-    active              BOOLEAN DEFAULT true,
-    rate_limit_config   JSONB,
-    created_at          TIMESTAMPTZ DEFAULT NOW(),
-    created_by          TEXT,
-    last_used_at        TIMESTAMPTZ,
-    expires_at          TIMESTAMPTZ,
-    UNIQUE (platform, key_name)
+CREATE TABLE weekly_reports (
+                                id                          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                                team_id                     TEXT NOT NULL,
+                                week_start                  TIMESTAMPTZ NOT NULL,
+                                week_end                    TIMESTAMPTZ NOT NULL,
+                                executive_summary           TEXT,
+                                user_reports                JSONB NOT NULL,
+                                velocity_analysis           TEXT,
+                                collaboration_notes         TEXT,
+                                team_blockers               JSONB DEFAULT '[]'::jsonb,
+                                recommendations             TEXT[] DEFAULT '{}',
+                                growth_opportunities        TEXT[] DEFAULT '{}',
+                                metrics_summary             JSONB DEFAULT '{}'::jsonb,
+                                ai_model                    TEXT,
+                                ai_tokens                   INTEGER,
+                                ai_latency_ms               INTEGER,
+                                generated_at                TIMESTAMPTZ DEFAULT NOW(),
+                                expires_at                  TIMESTAMPTZ,
+                                version                     TEXT DEFAULT '1.0',
+                                CONSTRAINT fk_weekly_reports_team
+                                    FOREIGN KEY (team_id)
+        REFERENCES teams(team_id)
+        ON DELETE CASCADE,
+                                UNIQUE (team_id, week_start, week_end)
 );
 
-CREATE INDEX idx_api_keys_platform ON api_keys (platform) WHERE active = true;
-CREATE INDEX idx_api_keys_expires ON api_keys (expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX idx_weekly_reports_team_week ON weekly_reports (team_id, week_start DESC);
+CREATE INDEX idx_weekly_reports_generated ON weekly_reports (generated_at DESC);
+CREATE INDEX idx_weekly_reports_expires ON weekly_reports (expires_at) WHERE expires_at IS NOT NULL;
 
 -- ============================================================================
 -- MATERIALIZED VIEWS
@@ -368,7 +393,7 @@ SELECT
     SUM(e.size) FILTER (WHERE e.size IS NOT NULL) AS total_size,
     AVG(e.size) FILTER (WHERE e.size IS NOT NULL) AS avg_size
 FROM events e
-JOIN team_members tm ON e.user_id = tm.user_id
+         JOIN team_members tm ON e.user_id = tm.user_id
 WHERE tm.left_at IS NULL
 GROUP BY tm.team_id, DATE_TRUNC('week', e.timestamp), e.source;
 
@@ -396,10 +421,10 @@ CREATE INDEX idx_user_correlation_summary_user ON user_correlation_summary (user
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
+    RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = NOW();
-    RETURN NEW;
+RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -410,6 +435,12 @@ CREATE TRIGGER update_teams_updated_at BEFORE UPDATE ON teams
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_events_updated_at BEFORE UPDATE ON events
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_weekly_metrics_updated_at BEFORE UPDATE ON weekly_metrics
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_team_weekly_metrics_updated_at BEFORE UPDATE ON team_weekly_metrics
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE OR REPLACE FUNCTION refresh_all_materialized_views()
@@ -426,23 +457,7 @@ CREATE OR REPLACE FUNCTION cleanup_expired_summaries()
 BEGIN
     DELETE FROM summaries WHERE expires_at < NOW();
 DELETE FROM team_summaries WHERE expires_at < NOW();
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION create_next_month_partition()
-    RETURNS void AS $$
-DECLARE
-    next_month_start DATE := DATE_TRUNC('month', NOW() + INTERVAL '1 month');
-next_month_end DATE := next_month_start + INTERVAL '1 month';
-partition_name TEXT := 'events_' || TO_CHAR(next_month_start, 'YYYY_MM');
-BEGIN
-    EXECUTE format(
-        'CREATE TABLE IF NOT EXISTS %I PARTITION OF events
-         FOR VALUES FROM (%L) TO (%L)',
-        partition_name,
-        next_month_start,
-        next_month_end
-    );
+DELETE FROM weekly_reports WHERE expires_at < NOW();
 END;
 $$ LANGUAGE plpgsql;
 
