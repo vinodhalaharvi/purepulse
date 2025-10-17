@@ -138,3 +138,7 @@ test-metrics-psql: ## Check view structure via psql
 
 test-metrics-columns: ## Show exact columns in views
 	@. ./.env && psql $$DATABASE_URL -c "SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_name IN ('daily_user_activity', 'weekly_team_activity', 'user_correlation_summary') ORDER BY table_name, ordinal_position;"
+
+test-team-weekly: ## Test team weekly aggregation and Claude analysis
+	@echo "Testing team weekly aggregation..."
+	@. ./.env && go run ./cmd/test-team-weekly/main.go

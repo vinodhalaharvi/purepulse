@@ -51,13 +51,173 @@ func QueryWeeklyTeamActivity(limit int) query.Query[query.TeamActivityRow] {
 		Bound(query.Limit(limit))
 }
 
-// ============================================================================
-// VIEW DATA CHECKS (Pure)
-// ============================================================================
+// RefreshView executes REFRESH MATERIALIZED VIEW
+func RefreshView(
+	ctx context.Context,
+	conn *db.Connection,
+	viewName string,
+) effect.Writer[[]string, result.Result[string]] {
+
+	logs := []string{fmt.Sprintf("refresh_view_started: view=%s", viewName)}
+
+	// Try concurrent first
+	refreshSQL := fmt.Sprintf("REFRESH MATERIALIZED VIEW CONCURRENTLY %s", viewName)
+	_, err := conn.DB.ExecContext(ctx, refreshSQL)
+
+	if err != nil {
+		// Fall back to non-concurrent
+		refreshSQL = fmt.Sprintf("REFRESH MATERIALIZED VIEW %s", viewName)
+		_, err = conn.DB.ExecContext(ctx, refreshSQL)
+
+		if err != nil {
+			logs = append(logs, fmt.Sprintf("refresh_failed: %v", err))
+			return effect.NewWriter(
+				result.Err[string](fmt.Errorf("failed to refresh %s: %w", viewName, err)),
+				logs,
+			)
+		}
+
+		logs = append(logs, fmt.Sprintf("refresh_succeeded (non-concurrent): view=%s", viewName))
+		return effect.NewWriter(result.Ok(fmt.Sprintf("Refreshed %s", viewName)), logs)
+	}
+
+	logs = append(logs, fmt.Sprintf("refresh_succeeded (concurrent): view=%s", viewName))
+	return effect.NewWriter(result.Ok(fmt.Sprintf("Refreshed %s", viewName)), logs)
+}
 
 // ============================================================================
-// MAIN TEST
+// FETCH VIEW DATA (Pure Query Building + Impure Execution)
 // ============================================================================
+
+// FetchDailyUserActivityData fetches and aggregates using monoids
+func FetchDailyUserActivityData(
+	ctx context.Context,
+	conn *db.Connection,
+	limit int,
+) effect.Writer[[]string, result.Result[[]query.DailyActivityAgg]] {
+
+	logs := []string{fmt.Sprintf("fetch_daily_activity_started: limit=%d", limit)}
+
+	// Build query using monoids
+	queryBuilder := QueryDailyUserActivity(limit)
+	sql, params := queryBuilder.Build()
+
+	logs = append(logs, fmt.Sprintf("generated_sql: %s", sql))
+
+	rows, err := conn.DB.QueryContext(ctx, sql, params...)
+	if err != nil {
+		logs = append(logs, fmt.Sprintf("query_failed: %v", err))
+		return effect.NewWriter(result.Err[[]query.DailyActivityAgg](err), logs)
+	}
+	defer rows.Close()
+
+	var results []query.DailyActivityAgg
+	for rows.Next() {
+		row, err := query.ScanDailyActivityAgg(rows)
+		if err != nil {
+			logs = append(logs, fmt.Sprintf("scan_error: %v", err))
+			continue
+		}
+		results = append(results, row)
+	}
+
+	logs = append(logs, fmt.Sprintf("fetch_succeeded: rows=%d", len(results)))
+	return effect.NewWriter(result.Ok(results), logs)
+}
+
+// FetchCorrelationData fetches correlation summary using monoids
+func FetchCorrelationData(
+	ctx context.Context,
+	conn *db.Connection,
+	limit int,
+) effect.Writer[[]string, result.Result[[]query.CorrelationRow]] {
+
+	logs := []string{fmt.Sprintf("fetch_correlations_started: limit=%d", limit)}
+
+	// Build query using monoids
+	queryBuilder := QueryUserCorrelationSummary(limit)
+	sql, params := queryBuilder.Build()
+
+	logs = append(logs, fmt.Sprintf("generated_sql: %s", sql))
+
+	rows, err := conn.DB.QueryContext(ctx, sql, params...)
+	if err != nil {
+		logs = append(logs, fmt.Sprintf("query_failed: %v", err))
+		return effect.NewWriter(result.Err[[]query.CorrelationRow](err), logs)
+	}
+	defer rows.Close()
+
+	var results []query.CorrelationRow
+	for rows.Next() {
+		row, err := query.ScanCorrelationRow(rows)
+		if err != nil {
+			logs = append(logs, fmt.Sprintf("scan_error: %v", err))
+			continue
+		}
+		results = append(results, row)
+	}
+
+	logs = append(logs, fmt.Sprintf("fetch_succeeded: rows=%d", len(results)))
+	return effect.NewWriter(result.Ok(results), logs)
+}
+
+// FetchTeamActivityData fetches team activity using monoids
+func FetchTeamActivityData(
+	ctx context.Context,
+	conn *db.Connection,
+	limit int,
+) effect.Writer[[]string, result.Result[[]query.TeamActivityRow]] {
+
+	logs := []string{fmt.Sprintf("fetch_team_activity_started: limit=%d", limit)}
+
+	// Build query using monoids
+	queryBuilder := QueryWeeklyTeamActivity(limit)
+	sql, params := queryBuilder.Build()
+
+	logs = append(logs, fmt.Sprintf("generated_sql: %s", sql))
+
+	rows, err := conn.DB.QueryContext(ctx, sql, params...)
+	if err != nil {
+		logs = append(logs, fmt.Sprintf("query_failed: %v", err))
+		return effect.NewWriter(result.Err[[]query.TeamActivityRow](err), logs)
+	}
+	defer rows.Close()
+
+	var results []query.TeamActivityRow
+	for rows.Next() {
+		row, err := query.ScanTeamActivityRow(rows)
+		if err != nil {
+			logs = append(logs, fmt.Sprintf("scan_error: %v", err))
+			continue
+		}
+		results = append(results, row)
+	}
+
+	logs = append(logs, fmt.Sprintf("fetch_succeeded: rows=%d", len(results)))
+	return effect.NewWriter(result.Ok(results), logs)
+}
+
+// CheckViewData counts rows in a view using monoids
+func CheckViewData(
+	ctx context.Context,
+	conn *db.Connection,
+	viewName string,
+) effect.Writer[[]string, result.Result[ViewRowCount]] {
+
+	logs := []string{fmt.Sprintf("check_view_started: view=%s", viewName)}
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", viewName)
+	var count int
+
+	err := conn.DB.QueryRowContext(ctx, countQuery).Scan(&count)
+	if err != nil {
+		logs = append(logs, fmt.Sprintf("check_failed: %v", err))
+		return effect.NewWriter(result.Err[ViewRowCount](err), logs)
+	}
+
+	logs = append(logs, fmt.Sprintf("check_succeeded: row_count=%d", count))
+	return effect.NewWriter(result.Ok(ViewRowCount(count)), logs)
+}
 
 func main() {
 	if err := godotenv.Load(); err != nil {
@@ -286,176 +446,4 @@ func main() {
 	}
 
 	fmt.Println("\nDiagnostic complete!")
-}
-
-// ============================================================================
-// VIEW DATA CHECKS (Pure)
-// ============================================================================
-
-// RefreshView executes REFRESH MATERIALIZED VIEW
-func RefreshView(
-	ctx context.Context,
-	conn *db.Connection,
-	viewName string,
-) effect.Writer[[]string, result.Result[string]] {
-
-	logs := []string{fmt.Sprintf("refresh_view_started: view=%s", viewName)}
-
-	// Try concurrent first
-	refreshSQL := fmt.Sprintf("REFRESH MATERIALIZED VIEW CONCURRENTLY %s", viewName)
-	_, err := conn.DB.ExecContext(ctx, refreshSQL)
-
-	if err != nil {
-		// Fall back to non-concurrent
-		refreshSQL = fmt.Sprintf("REFRESH MATERIALIZED VIEW %s", viewName)
-		_, err = conn.DB.ExecContext(ctx, refreshSQL)
-
-		if err != nil {
-			logs = append(logs, fmt.Sprintf("refresh_failed: %v", err))
-			return effect.NewWriter(
-				result.Err[string](fmt.Errorf("failed to refresh %s: %w", viewName, err)),
-				logs,
-			)
-		}
-
-		logs = append(logs, fmt.Sprintf("refresh_succeeded (non-concurrent): view=%s", viewName))
-		return effect.NewWriter(result.Ok(fmt.Sprintf("Refreshed %s", viewName)), logs)
-	}
-
-	logs = append(logs, fmt.Sprintf("refresh_succeeded (concurrent): view=%s", viewName))
-	return effect.NewWriter(result.Ok(fmt.Sprintf("Refreshed %s", viewName)), logs)
-}
-
-// ============================================================================
-// FETCH VIEW DATA (Pure Query Building + Impure Execution)
-// ============================================================================
-
-// FetchDailyUserActivityData fetches and aggregates using monoids
-func FetchDailyUserActivityData(
-	ctx context.Context,
-	conn *db.Connection,
-	limit int,
-) effect.Writer[[]string, result.Result[[]query.DailyActivityAgg]] {
-
-	logs := []string{fmt.Sprintf("fetch_daily_activity_started: limit=%d", limit)}
-
-	// Build query using monoids
-	queryBuilder := QueryDailyUserActivity(limit)
-	sql, params := queryBuilder.Build()
-
-	logs = append(logs, fmt.Sprintf("generated_sql: %s", sql))
-
-	rows, err := conn.DB.QueryContext(ctx, sql, params...)
-	if err != nil {
-		logs = append(logs, fmt.Sprintf("query_failed: %v", err))
-		return effect.NewWriter(result.Err[[]query.DailyActivityAgg](err), logs)
-	}
-	defer rows.Close()
-
-	var results []query.DailyActivityAgg
-	for rows.Next() {
-		row, err := query.ScanDailyActivityAgg(rows)
-		if err != nil {
-			logs = append(logs, fmt.Sprintf("scan_error: %v", err))
-			continue
-		}
-		results = append(results, row)
-	}
-
-	logs = append(logs, fmt.Sprintf("fetch_succeeded: rows=%d", len(results)))
-	return effect.NewWriter(result.Ok(results), logs)
-}
-
-// FetchCorrelationData fetches correlation summary using monoids
-func FetchCorrelationData(
-	ctx context.Context,
-	conn *db.Connection,
-	limit int,
-) effect.Writer[[]string, result.Result[[]query.CorrelationRow]] {
-
-	logs := []string{fmt.Sprintf("fetch_correlations_started: limit=%d", limit)}
-
-	// Build query using monoids
-	queryBuilder := QueryUserCorrelationSummary(limit)
-	sql, params := queryBuilder.Build()
-
-	logs = append(logs, fmt.Sprintf("generated_sql: %s", sql))
-
-	rows, err := conn.DB.QueryContext(ctx, sql, params...)
-	if err != nil {
-		logs = append(logs, fmt.Sprintf("query_failed: %v", err))
-		return effect.NewWriter(result.Err[[]query.CorrelationRow](err), logs)
-	}
-	defer rows.Close()
-
-	var results []query.CorrelationRow
-	for rows.Next() {
-		row, err := query.ScanCorrelationRow(rows)
-		if err != nil {
-			logs = append(logs, fmt.Sprintf("scan_error: %v", err))
-			continue
-		}
-		results = append(results, row)
-	}
-
-	logs = append(logs, fmt.Sprintf("fetch_succeeded: rows=%d", len(results)))
-	return effect.NewWriter(result.Ok(results), logs)
-}
-
-// FetchTeamActivityData fetches team activity using monoids
-func FetchTeamActivityData(
-	ctx context.Context,
-	conn *db.Connection,
-	limit int,
-) effect.Writer[[]string, result.Result[[]query.TeamActivityRow]] {
-
-	logs := []string{fmt.Sprintf("fetch_team_activity_started: limit=%d", limit)}
-
-	// Build query using monoids
-	queryBuilder := QueryWeeklyTeamActivity(limit)
-	sql, params := queryBuilder.Build()
-
-	logs = append(logs, fmt.Sprintf("generated_sql: %s", sql))
-
-	rows, err := conn.DB.QueryContext(ctx, sql, params...)
-	if err != nil {
-		logs = append(logs, fmt.Sprintf("query_failed: %v", err))
-		return effect.NewWriter(result.Err[[]query.TeamActivityRow](err), logs)
-	}
-	defer rows.Close()
-
-	var results []query.TeamActivityRow
-	for rows.Next() {
-		row, err := query.ScanTeamActivityRow(rows)
-		if err != nil {
-			logs = append(logs, fmt.Sprintf("scan_error: %v", err))
-			continue
-		}
-		results = append(results, row)
-	}
-
-	logs = append(logs, fmt.Sprintf("fetch_succeeded: rows=%d", len(results)))
-	return effect.NewWriter(result.Ok(results), logs)
-}
-
-// CheckViewData counts rows in a view using monoids
-func CheckViewData(
-	ctx context.Context,
-	conn *db.Connection,
-	viewName string,
-) effect.Writer[[]string, result.Result[ViewRowCount]] {
-
-	logs := []string{fmt.Sprintf("check_view_started: view=%s", viewName)}
-
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s", viewName)
-	var count int
-
-	err := conn.DB.QueryRowContext(ctx, countQuery).Scan(&count)
-	if err != nil {
-		logs = append(logs, fmt.Sprintf("check_failed: %v", err))
-		return effect.NewWriter(result.Err[ViewRowCount](err), logs)
-	}
-
-	logs = append(logs, fmt.Sprintf("check_succeeded: row_count=%d", count))
-	return effect.NewWriter(result.Ok(ViewRowCount(count)), logs)
 }
