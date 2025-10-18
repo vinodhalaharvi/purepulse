@@ -3,7 +3,7 @@ module github.com/vinodhalaharvi/purepulse
 go 1.25.0
 
 // Use local purekernels for development
-replace github.com/vinodhalaharvi/purekernels => ../purekernels
+//replace github.com/vinodhalaharvi/purekernels => ../purekernels
 
 require (
 	github.com/99designs/gqlgen v0.17.81
@@ -11,9 +11,11 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/vektah/gqlparser/v2 v2.5.30
-	github.com/vinodhalaharvi/purekernels v0.0.0-00010101000000-000000000000
+	//github.com/vinodhalaharvi/purekernels v0.0.0-00010101000000-000000000000
 	golang.org/x/exp v0.0.0-20251009144603-d2f985daa21b
 )
+
+require github.com/vinodhalaharvi/purekernels v0.0.0-20251016165720-86e8311efe94
 
 require (
 	github.com/agnivade/levenshtein v1.2.1 // indirect
