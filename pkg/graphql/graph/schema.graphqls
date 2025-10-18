@@ -1,0 +1,37 @@
+type Query {
+    userWeekly(
+        userID: String!
+        weekStart: String!
+        weekEnd: String!
+    ): UserWeeklyReport
+}
+
+type UserWeeklyReport {
+    userID: String!
+    wins: [Win!]
+    inProgress: [InProgress!]
+    blocked: [Blocked!]
+    notes: String
+    generatedAt: String!
+}
+
+type Win {
+    title: String!
+    description: String!
+    impact: String!
+}
+
+type InProgress {
+    title: String!
+    percentComplete: Int!
+    blocker: String
+    dueDate: String
+}
+
+type Blocked {
+    title: String!
+    blockedBy: String!
+    durationHours: Int!
+    impactLevel: String!
+    suggestedAction: String!
+}
