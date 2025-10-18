@@ -67,7 +67,7 @@ func main() {
 	// STEP 4: Define Users and Time Range
 	// ========================================================================
 
-	userIDs := []types.UserID{"alice", "bob", "charlie"}
+	userIDs := []types.UserID{"alice", "bob", "charlie", "david", "emma"}
 	timeRange := types.TimeRange{
 		Start: time.Now().AddDate(0, 0, -30), // Last 30 days
 		End:   time.Now(),
@@ -244,6 +244,7 @@ func insertEvents(ctx context.Context, db *sql.DB, eventList []events.Event) (in
             size,
             duration_seconds
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ON CONFLICT DO NOTHING  -- Add this to skip duplicates
     `)
 	if err != nil {
 		return 0, fmt.Errorf("failed to prepare statement: %w", err)
@@ -251,7 +252,7 @@ func insertEvents(ctx context.Context, db *sql.DB, eventList []events.Event) (in
 	defer stmt.Close()
 
 	inserted := 0
-	for _, event := range eventList {
+	for i, event := range eventList {
 		// Handle nullable fields
 		var threadID, parentID *string
 		if event.Metadata.ThreadID != "" {
@@ -277,8 +278,11 @@ func insertEvents(ctx context.Context, db *sql.DB, eventList []events.Event) (in
 		)
 
 		if err != nil {
-			log.Printf("Warning: Failed to insert event %s: %v", event.ID, err)
-			continue
+			// Log the FIRST error with details
+			log.Printf("ERROR on event %d (%s): %v", i, event.ID, err)
+			log.Printf("  UserID: %s, Source: %s, Type: %s", event.UserID, event.Source, event.Type)
+			log.Printf("  Payload: %s", string(event.Payload))
+			return 0, fmt.Errorf("failed at event %s: %w", event.ID, err)
 		}
 
 		rowsAffected, _ := result.RowsAffected()

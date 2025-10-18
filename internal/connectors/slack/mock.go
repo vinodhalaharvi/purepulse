@@ -11,23 +11,19 @@ import (
 	"github.com/vinodhalaharvi/purepulse/pkg/types"
 )
 
-// ============================================================================
-// MOCK SLACK CONNECTOR
-// ============================================================================
-
 // MockClient simulates Slack API
 type MockClient struct {
 	config      types.SlackConfig
-	latencyMS   int     // Simulated API latency
-	shouldFail  bool    // Simulate failures
-	failureRate float64 // 0.0 - 1.0
+	latencyMS   int
+	shouldFail  bool
+	failureRate float64
 }
 
 // NewMockClient creates a mock Slack connector
 func NewMockClient(config types.SlackConfig) *MockClient {
 	return &MockClient{
 		config:      config,
-		latencyMS:   50 + rand.Intn(100), // 50-150ms latency
+		latencyMS:   50 + rand.Intn(100),
 		shouldFail:  false,
 		failureRate: 0.0,
 	}
@@ -72,16 +68,36 @@ func (c *MockClient) generateMockEvents(
 
 	var mockEvents []events.Event
 
+	// Realistic message templates
+	messages := []string{
+		"Just pushed the fix for the authentication issue to staging",
+		"Can someone review PR #1234 for the payment gateway?",
+		"Deployed v2.3.4 to production - all systems green",
+		"Found a critical bug in the checkout flow, working on a fix",
+		"Sprint planning notes uploaded to Confluence",
+		"Database migration completed successfully, no downtime",
+		"API rate limiting implemented as discussed in the RFC",
+		"Customer reported issue with password reset flow - investigating",
+		"Performance improvements deployed - seeing 40% reduction in latency",
+		"Updated the OpenAPI documentation for the new endpoints",
+		"Staging environment is down, investigating with DevOps",
+		"Security patch applied to all production servers",
+		"Code review feedback addressed, ready for merge",
+		"New feature flag enabled for 10% of users",
+		"Incident resolved - post-mortem scheduled for tomorrow",
+	}
+
 	// Generate 20-50 messages
 	messageCount := 20 + rand.Intn(30)
 
 	for i := 0; i < messageCount; i++ {
 		timestamp := randomTimeInRange(tr)
+		channel := randomChannel()
+		message := messages[rand.Intn(len(messages))]
 
-		// Create mock message payload
 		payload := map[string]interface{}{
-			"text":    fmt.Sprintf("Mock Slack message %d", i+1),
-			"channel": randomChannel(),
+			"text":    message,
+			"channel": channel,
 			"ts":      fmt.Sprintf("%d.%06d", timestamp.Unix(), rand.Intn(999999)),
 			"user":    string(userID),
 			"team":    c.config.WorkspaceID,
@@ -90,7 +106,7 @@ func (c *MockClient) generateMockEvents(
 		payloadJSON, _ := json.Marshal(payload)
 
 		mockEvents = append(mockEvents, events.Event{
-			ID:        types.EventID(fmt.Sprintf("slack-msg-%d", i)),
+			ID:        types.EventID(fmt.Sprintf("slack-msg-%s-%d", userID, i)),
 			UserID:    userID,
 			Source:    types.PlatformSlack,
 			Type:      types.EventSlackMessage,
@@ -98,8 +114,8 @@ func (c *MockClient) generateMockEvents(
 			Payload:   payloadJSON,
 			Metadata: events.EventMetadata{
 				Author:  string(userID),
-				Channel: randomChannel(),
-				Size:    20 + rand.Intn(200), // Message length
+				Channel: channel,
+				Size:    len(message),
 			},
 		})
 	}
@@ -114,7 +130,7 @@ func (c *MockClient) generateMockEvents(
 			"reaction": randomEmoji(),
 			"user":     string(userID),
 			"item": map[string]string{
-				"type":    "message",
+				"type":    "slack_message",
 				"channel": randomChannel(),
 			},
 		}
@@ -122,7 +138,7 @@ func (c *MockClient) generateMockEvents(
 		payloadJSON, _ := json.Marshal(payload)
 
 		mockEvents = append(mockEvents, events.Event{
-			ID:        types.EventID(fmt.Sprintf("slack-reaction-%d", i)),
+			ID:        types.EventID(fmt.Sprintf("slack-reaction-%s-%d", userID, i)),
 			UserID:    userID,
 			Source:    types.PlatformSlack,
 			Type:      types.EventSlackReaction,
@@ -137,21 +153,31 @@ func (c *MockClient) generateMockEvents(
 
 	// Generate 2-5 file uploads
 	fileCount := 2 + rand.Intn(3)
+	fileNames := []string{
+		"architecture-diagram.pdf",
+		"sprint-report.xlsx",
+		"api-documentation.md",
+		"test-results.json",
+		"deployment-guide.pdf",
+		"performance-metrics.csv",
+		"security-audit.pdf",
+	}
 
 	for i := 0; i < fileCount; i++ {
 		timestamp := randomTimeInRange(tr)
+		fileName := fileNames[rand.Intn(len(fileNames))]
 
 		payload := map[string]interface{}{
-			"name":     fmt.Sprintf("document-%d.pdf", i+1),
-			"mimetype": "application/pdf",
-			"size":     1024 * (100 + rand.Intn(900)), // 100KB - 1MB
+			"name":     fileName,
+			"mimetype": getMimeType(fileName),
+			"size":     1024 * (100 + rand.Intn(900)),
 			"user":     string(userID),
 		}
 
 		payloadJSON, _ := json.Marshal(payload)
 
 		mockEvents = append(mockEvents, events.Event{
-			ID:        types.EventID(fmt.Sprintf("slack-file-%d", i)),
+			ID:        types.EventID(fmt.Sprintf("slack-file-%s-%d", userID, i)),
 			UserID:    userID,
 			Source:    types.PlatformSlack,
 			Type:      types.EventSlackFileUpload,
@@ -168,19 +194,19 @@ func (c *MockClient) generateMockEvents(
 	return mockEvents
 }
 
-// ============================================================================
-// HELPERS
-// ============================================================================
-
+// Helper functions
 func randomChannel() string {
 	channels := []string{
-		"general",
-		"engineering",
-		"product",
-		"design",
-		"marketing",
-		"random",
-		"watercooler",
+		"#engineering",
+		"#product",
+		"#design",
+		"#standup",
+		"#incidents",
+		"#releases",
+		"#backend",
+		"#frontend",
+		"#devops",
+		"#random",
 	}
 	return channels[rand.Intn(len(channels))]
 }
@@ -188,15 +214,34 @@ func randomChannel() string {
 func randomEmoji() string {
 	emojis := []string{
 		"thumbsup",
-		"heart",
+		"white_check_mark",
 		"rocket",
 		"eyes",
 		"fire",
 		"100",
-		"party",
-		"clap",
+		"ship",
+		"tada",
 	}
 	return emojis[rand.Intn(len(emojis))]
+}
+
+func getMimeType(filename string) string {
+	if len(filename) > 4 {
+		ext := filename[len(filename)-4:]
+		switch ext {
+		case ".pdf":
+			return "application/pdf"
+		case ".csv":
+			return "text/csv"
+		case "xlsx":
+			return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+		case "json":
+			return "application/json"
+		case ".md":
+			return "text/markdown"
+		}
+	}
+	return "application/octet-stream"
 }
 
 func randomTimeInRange(tr types.TimeRange) time.Time {

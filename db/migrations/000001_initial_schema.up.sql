@@ -247,22 +247,24 @@ INSERT INTO users (user_id, display_name, email, active)
 VALUES
     ('alice', 'Alice User', 'alice@example.com', true),
     ('bob', 'Bob User', 'bob@example.com', true),
-    ('charlie', 'Charlie User', 'charlie@example.com', true)
-ON CONFLICT (user_id) DO NOTHING;
+    ('charlie', 'Charlie User', 'charlie@example.com', true),
+    ('david', 'David User', 'david@example.com', true),
+    ('emma', 'Emma User', 'emma@example.com', true)
+    ON CONFLICT (user_id) DO NOTHING;
 
 INSERT INTO teams (team_id, team_name, description)
 VALUES
     ('team-engineering', 'Engineering Team', 'Core platform engineering')
-ON CONFLICT (team_id) DO NOTHING;
+    ON CONFLICT (team_id) DO NOTHING;
 
 INSERT INTO team_members (team_id, user_id, role)
 VALUES
     ('team-engineering', 'alice', 'senior-engineer'),
     ('team-engineering', 'bob', 'engineer'),
-    ('team-engineering', 'charlie', 'engineer')
-ON CONFLICT DO NOTHING;
-
-
+    ('team-engineering', 'charlie', 'engineer'),
+    ('team-engineering', 'david', 'engineer'),
+    ('team-engineering', 'emma', 'senior-engineer')
+    ON CONFLICT DO NOTHING;
 
 
 
