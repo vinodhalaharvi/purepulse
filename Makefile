@@ -149,10 +149,47 @@ graphql-server: ## Start GraphQL server
 	@echo "Starting GraphQL server..."
 	@. ./.env && go run ./pkg/graphql/server.go
 
-graphql-generate: ## Generate GraphQL code (gqlgen)
+graphql-generate: graphql-deps  ## Generate GraphQL code (gqlgen)
 	@echo "Generating GraphQL code..."
 	@cd pkg/graphql && go run github.com/99designs/gqlgen generate
 
 # Weekly report generation pipeline
 generate-reports: refresh-views test-user-weekly test-team-weekly ## Generate all weekly reports (user + team)
 	@echo "✅ All reports generated!"
+
+
+# Complete end-to-end testing pipeline
+full-stack: ## Complete setup: reset DB → ingest → generate reports → start GraphQL
+	@echo "🚀 Starting full stack setup..."
+	@echo "Step 1/8: Resetting database..."
+	@make db-reset
+	@echo "Step 2/8: Ingesting data from connectors..."
+	@make ingest
+	@echo "Step 3/8: Refreshing materialized views..."
+	@make refresh-views
+	@echo "Step 4/8: Generating user weekly reports..."
+	@make test-user-weekly
+	@echo "Step 5/8: Generating team weekly reports..."
+	@make test-team-weekly
+	@echo "Step 6/8: Generating GraphQL code..."
+	@make graphql-generate
+	@echo "Step 7/8: Verifying data..."
+	@psql $(DATABASE_URL) -c "SELECT COUNT(*) as user_reports FROM weekly_reports;"
+	@psql $(DATABASE_URL) -c "SELECT COUNT(*) as team_reports FROM team_weekly_reports;"
+	@echo "Step 8/8: Starting GraphQL server..."
+	@echo "✅ Setup complete! GraphQL playground at http://localhost:8080/"
+	@make graphql-server
+
+# Alternative: run server in background and open browser
+full-stack-demo: ## Same as full-stack but opens browser automatically
+	@make db-reset ingest refresh-views test-user-weekly test-team-weekly graphql-generate
+	@echo "✅ All data generated! Starting server and opening browser..."
+	@open http://localhost:8080/ 2>/dev/null || xdg-open http://localhost:8080/ 2>/dev/null || echo "Open http://localhost:8080/ in your browser"
+	@make graphql-server
+
+# GraphQL dependencies
+graphql-deps: ## Install/update gqlgen dependencies
+	@echo "Installing gqlgen dependencies..."
+	@go get github.com/99designs/gqlgen/codegen@v0.17.81
+	@go get github.com/99designs/gqlgen@v0.17.81
+	@echo "✅ GraphQL dependencies installed"
