@@ -11,7 +11,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/vinodhalaharvi/purepulse/pkg/analytics"
 	"github.com/vinodhalaharvi/purepulse/pkg/graphql/graph/model"
 	"github.com/vinodhalaharvi/purepulse/pkg/llm"
 	"github.com/vinodhalaharvi/purepulse/pkg/types"
@@ -82,45 +81,27 @@ func (r *queryResolver) UserWeekly(ctx context.Context, userID string, weekStart
 
 // TeamWeekly is the resolver for the teamWeekly field.
 func (r *queryResolver) TeamWeekly(ctx context.Context, teamID string, weekStart string, weekEnd string) (*model.TeamWeeklyReport, error) {
-	// Parse dates
+	// Parse start date only (team_weekly_reports uses week_start as key)
 	startDate, err := time.Parse("2006-01-02", weekStart)
 	if err != nil {
 		return nil, fmt.Errorf("invalid weekStart date: %w", err)
 	}
 
-	endDate, err := time.Parse("2006-01-02", weekEnd)
-	if err != nil {
-		return nil, fmt.Errorf("invalid weekEnd date: %w", err)
-	}
-
-	week := types.TimeRange{
-		Start: startDate,
-		End:   endDate,
-	}
-
-	// First check for existing team report
+	// Just fetch from team_weekly_reports table
 	existingReport, err := r.fetchExistingTeamReport(ctx, teamID, startDate)
-	if err == nil && existingReport != nil {
-		log.Printf("Found existing team report for %s", teamID)
-		return existingReport, nil
-	}
-
-	log.Printf("Generating new team report for %s from %s to %s", teamID, weekStart, weekEnd)
-
-	// Fetch all team members (for now, just get all users)
-	teamMembers, err := r.fetchTeamMembers(ctx, teamID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch team members: %w", err)
+		return nil, err
 	}
 
-	if len(teamMembers) == 0 {
+	if existingReport == nil {
+		// No report found
 		return &model.TeamWeeklyReport{
 			TeamID:             teamID,
 			WeekStart:          weekStart,
 			WeekEnd:            weekEnd,
-			ExecutiveSummary:   "No team members found",
-			VelocityAnalysis:   "Unable to analyze velocity",
-			CollaborationNotes: "No collaboration data available",
+			ExecutiveSummary:   "No report found. Run 'make test-team-weekly' to generate.",
+			VelocityAnalysis:   "Not available",
+			CollaborationNotes: "Not available",
 			TeamBlockers:       []*model.TeamBlocker{},
 			Recommendations:    []string{},
 			MemberCount:        0,
@@ -128,59 +109,7 @@ func (r *queryResolver) TeamWeekly(ctx context.Context, teamID string, weekStart
 		}, nil
 	}
 
-	// Fetch user reports for all team members
-	userReports := make(map[types.UserID]analytics.UserWeeklyReport)
-	for _, userID := range teamMembers {
-		report, err := r.fetchUserReport(ctx, string(userID), startDate)
-		if err == nil && report != nil {
-			userReports[userID] = *report
-		}
-	}
-
-	// If no user reports exist, generate basic team summary
-	if len(userReports) == 0 {
-		return r.buildBasicTeamReport(teamID, teamMembers, week), nil
-	}
-
-	// Aggregate team metrics
-	metrics := r.aggregateTeamMetrics(teamID, week, userReports)
-
-	// Initialize Claude if needed
-	if r.ClaudeClient == nil {
-		r.ClaudeClient = &llm.ClaudeClient{
-			APIKey:     os.Getenv("ANTHROPIC_API_KEY"),
-			Model:      "claude-sonnet-4-20250514",
-			BaseURL:    "https://api.anthropic.com/v1",
-			MaxRetries: 3,
-			Timeout:    60 * time.Second,
-		}
-	}
-
-	// Generate team analysis with Claude
-	teamAnalysisWriter := llm.AnalyzeTeamWeekly(ctx, r.ClaudeClient, types.TeamID(teamID), week, metrics, userReports)
-	teamAnalysisRes, teamAnalysisLogs := teamAnalysisWriter.Run()
-
-	if len(teamAnalysisLogs) > 0 {
-		log.Println("Team analysis logs:")
-		for _, msg := range teamAnalysisLogs {
-			log.Printf("  %s", msg)
-		}
-	}
-
-	if !teamAnalysisRes.IsOk() {
-		log.Printf("Claude team analysis failed: %v, using fallback", teamAnalysisRes.Error())
-		return r.buildBasicTeamReport(teamID, teamMembers, week), nil
-	}
-
-	teamReport := teamAnalysisRes.Unwrap()
-
-	// Save the team report
-	if err := r.saveTeamReport(ctx, teamID, week, teamReport); err != nil {
-		log.Printf("Warning: failed to save team report: %v", err)
-	}
-
-	// Convert to GraphQL model
-	return r.convertTeamReportToGraphQL(teamReport, teamID, weekStart, weekEnd, len(teamMembers)), nil
+	return existingReport, nil
 }
 
 // Query returns QueryResolver implementation.

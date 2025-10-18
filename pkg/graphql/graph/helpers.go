@@ -217,18 +217,18 @@ func (r *queryResolver) buildBasicReport(userID string, dailyActivity []SimpleDa
 
 func (r *queryResolver) fetchExistingTeamReport(ctx context.Context, teamID string, weekStart time.Time) (*model.TeamWeeklyReport, error) {
 	query := `
-        SELECT 
-            executive_summary,
-            velocity_analysis,
-            collaboration_notes,
-            team_blockers,
-            recommendations,
-            generated_at
-        FROM team_weekly_reports
-        WHERE team_id = $1 AND week_start = $2
-        ORDER BY generated_at DESC
-        LIMIT 1
-    `
+		SELECT 
+			executive_summary,
+			velocity_analysis,
+			collaboration_notes,
+			team_blockers,
+			recommendations,
+			generated_at
+		FROM team_weekly_reports
+		WHERE team_id = $1 AND week_start::date = $2::date
+		ORDER BY generated_at DESC
+		LIMIT 1
+	`
 
 	var executiveSummary, velocityAnalysis, collaborationNotes string
 	var blockersJSON, recommendationsJSON []byte

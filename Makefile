@@ -143,3 +143,16 @@ test-team-weekly: ## Test team weekly aggregation and Claude analysis
 test-user-weekly: ## Test all user weekly report generation
 	@echo "Testing user weekly reports..."
 	@. ./.env && go run ./cmd/test-user-weekly/main.go
+
+# GraphQL testing commands
+graphql-server: ## Start GraphQL server
+	@echo "Starting GraphQL server..."
+	@. ./.env && go run ./pkg/graphql/server.go
+
+graphql-generate: ## Generate GraphQL code (gqlgen)
+	@echo "Generating GraphQL code..."
+	@cd pkg/graphql && go run github.com/99designs/gqlgen generate
+
+# Weekly report generation pipeline
+generate-reports: refresh-views test-user-weekly test-team-weekly ## Generate all weekly reports (user + team)
+	@echo "✅ All reports generated!"
