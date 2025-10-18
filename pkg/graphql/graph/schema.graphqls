@@ -1,37 +1,63 @@
 type Query {
-    userWeekly(
-        userID: String!
-        weekStart: String!
-        weekEnd: String!
-    ): UserWeeklyReport
+  userWeekly(
+    userID: String!
+    weekStart: String!
+    weekEnd: String!
+  ): UserWeeklyReport
+
+  teamWeekly(
+    teamID: String!
+    weekStart: String!
+    weekEnd: String!
+  ): TeamWeeklyReport
 }
 
 type UserWeeklyReport {
-    userID: String!
-    wins: [Win!]
-    inProgress: [InProgress!]
-    blocked: [Blocked!]
-    notes: String
-    generatedAt: String!
+  userID: String!
+  wins: [Win!]
+  inProgress: [InProgress!]
+  blocked: [Blocked!]
+  notes: String
+  generatedAt: String!
+}
+
+type TeamWeeklyReport {
+  teamID: String!
+  weekStart: String!
+  weekEnd: String!
+  executiveSummary: String!
+  velocityAnalysis: String!
+  collaborationNotes: String!
+  teamBlockers: [TeamBlocker!]
+  recommendations: [String!]
+  memberCount: Int!
+  generatedAt: String!
+}
+
+type TeamBlocker {
+  title: String!
+  affectedUsers: [String!]!
+  action: String!
 }
 
 type Win {
-    title: String!
-    description: String!
-    impact: String!
+  title: String!
+  description: String!
+  impact: String!
 }
 
 type InProgress {
-    title: String!
-    percentComplete: Int!
-    blocker: String
-    dueDate: String
+  title: String!
+  percentComplete: Int!
+  blocker: String
+  dueDate: String
 }
 
 type Blocked {
-    title: String!
-    blockedBy: String!
-    durationHours: Int!
-    impactLevel: String!
-    suggestedAction: String!
+  title: String!
+  blockedBy: String!
+  durationHours: Int!
+  impactLevel: String!
+  suggestedAction: String!
 }
+

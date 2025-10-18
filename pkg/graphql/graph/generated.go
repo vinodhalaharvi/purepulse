@@ -62,7 +62,27 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
+		TeamWeekly func(childComplexity int, teamID string, weekStart string, weekEnd string) int
 		UserWeekly func(childComplexity int, userID string, weekStart string, weekEnd string) int
+	}
+
+	TeamBlocker struct {
+		Action        func(childComplexity int) int
+		AffectedUsers func(childComplexity int) int
+		Title         func(childComplexity int) int
+	}
+
+	TeamWeeklyReport struct {
+		CollaborationNotes func(childComplexity int) int
+		ExecutiveSummary   func(childComplexity int) int
+		GeneratedAt        func(childComplexity int) int
+		MemberCount        func(childComplexity int) int
+		Recommendations    func(childComplexity int) int
+		TeamBlockers       func(childComplexity int) int
+		TeamID             func(childComplexity int) int
+		VelocityAnalysis   func(childComplexity int) int
+		WeekEnd            func(childComplexity int) int
+		WeekStart          func(childComplexity int) int
 	}
 
 	UserWeeklyReport struct {
@@ -83,6 +103,7 @@ type ComplexityRoot struct {
 
 type QueryResolver interface {
 	UserWeekly(ctx context.Context, userID string, weekStart string, weekEnd string) (*model.UserWeeklyReport, error)
+	TeamWeekly(ctx context.Context, teamID string, weekStart string, weekEnd string) (*model.TeamWeeklyReport, error)
 }
 
 type executableSchema struct {
@@ -160,6 +181,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.InProgress.Title(childComplexity), true
 
+	case "Query.teamWeekly":
+		if e.complexity.Query.TeamWeekly == nil {
+			break
+		}
+
+		args, err := ec.field_Query_teamWeekly_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.TeamWeekly(childComplexity, args["teamID"].(string), args["weekStart"].(string), args["weekEnd"].(string)), true
 	case "Query.userWeekly":
 		if e.complexity.Query.UserWeekly == nil {
 			break
@@ -171,6 +203,86 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.UserWeekly(childComplexity, args["userID"].(string), args["weekStart"].(string), args["weekEnd"].(string)), true
+
+	case "TeamBlocker.action":
+		if e.complexity.TeamBlocker.Action == nil {
+			break
+		}
+
+		return e.complexity.TeamBlocker.Action(childComplexity), true
+	case "TeamBlocker.affectedUsers":
+		if e.complexity.TeamBlocker.AffectedUsers == nil {
+			break
+		}
+
+		return e.complexity.TeamBlocker.AffectedUsers(childComplexity), true
+	case "TeamBlocker.title":
+		if e.complexity.TeamBlocker.Title == nil {
+			break
+		}
+
+		return e.complexity.TeamBlocker.Title(childComplexity), true
+
+	case "TeamWeeklyReport.collaborationNotes":
+		if e.complexity.TeamWeeklyReport.CollaborationNotes == nil {
+			break
+		}
+
+		return e.complexity.TeamWeeklyReport.CollaborationNotes(childComplexity), true
+	case "TeamWeeklyReport.executiveSummary":
+		if e.complexity.TeamWeeklyReport.ExecutiveSummary == nil {
+			break
+		}
+
+		return e.complexity.TeamWeeklyReport.ExecutiveSummary(childComplexity), true
+	case "TeamWeeklyReport.generatedAt":
+		if e.complexity.TeamWeeklyReport.GeneratedAt == nil {
+			break
+		}
+
+		return e.complexity.TeamWeeklyReport.GeneratedAt(childComplexity), true
+	case "TeamWeeklyReport.memberCount":
+		if e.complexity.TeamWeeklyReport.MemberCount == nil {
+			break
+		}
+
+		return e.complexity.TeamWeeklyReport.MemberCount(childComplexity), true
+	case "TeamWeeklyReport.recommendations":
+		if e.complexity.TeamWeeklyReport.Recommendations == nil {
+			break
+		}
+
+		return e.complexity.TeamWeeklyReport.Recommendations(childComplexity), true
+	case "TeamWeeklyReport.teamBlockers":
+		if e.complexity.TeamWeeklyReport.TeamBlockers == nil {
+			break
+		}
+
+		return e.complexity.TeamWeeklyReport.TeamBlockers(childComplexity), true
+	case "TeamWeeklyReport.teamID":
+		if e.complexity.TeamWeeklyReport.TeamID == nil {
+			break
+		}
+
+		return e.complexity.TeamWeeklyReport.TeamID(childComplexity), true
+	case "TeamWeeklyReport.velocityAnalysis":
+		if e.complexity.TeamWeeklyReport.VelocityAnalysis == nil {
+			break
+		}
+
+		return e.complexity.TeamWeeklyReport.VelocityAnalysis(childComplexity), true
+	case "TeamWeeklyReport.weekEnd":
+		if e.complexity.TeamWeeklyReport.WeekEnd == nil {
+			break
+		}
+
+		return e.complexity.TeamWeeklyReport.WeekEnd(childComplexity), true
+	case "TeamWeeklyReport.weekStart":
+		if e.complexity.TeamWeeklyReport.WeekStart == nil {
+			break
+		}
+
+		return e.complexity.TeamWeeklyReport.WeekStart(childComplexity), true
 
 	case "UserWeeklyReport.blocked":
 		if e.complexity.UserWeeklyReport.Blocked == nil {
@@ -344,6 +456,27 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 		return nil, err
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_teamWeekly_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "teamID", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["teamID"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "weekStart", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["weekStart"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "weekEnd", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["weekEnd"] = arg2
 	return args, nil
 }
 
@@ -736,6 +869,69 @@ func (ec *executionContext) fieldContext_Query_userWeekly(ctx context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_teamWeekly(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_teamWeekly,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().TeamWeekly(ctx, fc.Args["teamID"].(string), fc.Args["weekStart"].(string), fc.Args["weekEnd"].(string))
+		},
+		nil,
+		ec.marshalOTeamWeeklyReport2ᚖgithubᚗcomᚋvinodhalaharviᚋpurepulseᚋpkgᚋgraphqlᚋgraphᚋmodelᚐTeamWeeklyReport,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_teamWeekly(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "teamID":
+				return ec.fieldContext_TeamWeeklyReport_teamID(ctx, field)
+			case "weekStart":
+				return ec.fieldContext_TeamWeeklyReport_weekStart(ctx, field)
+			case "weekEnd":
+				return ec.fieldContext_TeamWeeklyReport_weekEnd(ctx, field)
+			case "executiveSummary":
+				return ec.fieldContext_TeamWeeklyReport_executiveSummary(ctx, field)
+			case "velocityAnalysis":
+				return ec.fieldContext_TeamWeeklyReport_velocityAnalysis(ctx, field)
+			case "collaborationNotes":
+				return ec.fieldContext_TeamWeeklyReport_collaborationNotes(ctx, field)
+			case "teamBlockers":
+				return ec.fieldContext_TeamWeeklyReport_teamBlockers(ctx, field)
+			case "recommendations":
+				return ec.fieldContext_TeamWeeklyReport_recommendations(ctx, field)
+			case "memberCount":
+				return ec.fieldContext_TeamWeeklyReport_memberCount(ctx, field)
+			case "generatedAt":
+				return ec.fieldContext_TeamWeeklyReport_generatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type TeamWeeklyReport", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_teamWeekly_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -839,6 +1035,391 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 				return ec.fieldContext___Schema_directives(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type __Schema", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TeamBlocker_title(ctx context.Context, field graphql.CollectedField, obj *model.TeamBlocker) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TeamBlocker_title,
+		func(ctx context.Context) (any, error) {
+			return obj.Title, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TeamBlocker_title(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TeamBlocker",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TeamBlocker_affectedUsers(ctx context.Context, field graphql.CollectedField, obj *model.TeamBlocker) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TeamBlocker_affectedUsers,
+		func(ctx context.Context) (any, error) {
+			return obj.AffectedUsers, nil
+		},
+		nil,
+		ec.marshalNString2ᚕstringᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TeamBlocker_affectedUsers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TeamBlocker",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TeamBlocker_action(ctx context.Context, field graphql.CollectedField, obj *model.TeamBlocker) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TeamBlocker_action,
+		func(ctx context.Context) (any, error) {
+			return obj.Action, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TeamBlocker_action(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TeamBlocker",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TeamWeeklyReport_teamID(ctx context.Context, field graphql.CollectedField, obj *model.TeamWeeklyReport) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TeamWeeklyReport_teamID,
+		func(ctx context.Context) (any, error) {
+			return obj.TeamID, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TeamWeeklyReport_teamID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TeamWeeklyReport",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TeamWeeklyReport_weekStart(ctx context.Context, field graphql.CollectedField, obj *model.TeamWeeklyReport) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TeamWeeklyReport_weekStart,
+		func(ctx context.Context) (any, error) {
+			return obj.WeekStart, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TeamWeeklyReport_weekStart(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TeamWeeklyReport",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TeamWeeklyReport_weekEnd(ctx context.Context, field graphql.CollectedField, obj *model.TeamWeeklyReport) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TeamWeeklyReport_weekEnd,
+		func(ctx context.Context) (any, error) {
+			return obj.WeekEnd, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TeamWeeklyReport_weekEnd(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TeamWeeklyReport",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TeamWeeklyReport_executiveSummary(ctx context.Context, field graphql.CollectedField, obj *model.TeamWeeklyReport) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TeamWeeklyReport_executiveSummary,
+		func(ctx context.Context) (any, error) {
+			return obj.ExecutiveSummary, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TeamWeeklyReport_executiveSummary(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TeamWeeklyReport",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TeamWeeklyReport_velocityAnalysis(ctx context.Context, field graphql.CollectedField, obj *model.TeamWeeklyReport) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TeamWeeklyReport_velocityAnalysis,
+		func(ctx context.Context) (any, error) {
+			return obj.VelocityAnalysis, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TeamWeeklyReport_velocityAnalysis(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TeamWeeklyReport",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TeamWeeklyReport_collaborationNotes(ctx context.Context, field graphql.CollectedField, obj *model.TeamWeeklyReport) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TeamWeeklyReport_collaborationNotes,
+		func(ctx context.Context) (any, error) {
+			return obj.CollaborationNotes, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TeamWeeklyReport_collaborationNotes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TeamWeeklyReport",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TeamWeeklyReport_teamBlockers(ctx context.Context, field graphql.CollectedField, obj *model.TeamWeeklyReport) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TeamWeeklyReport_teamBlockers,
+		func(ctx context.Context) (any, error) {
+			return obj.TeamBlockers, nil
+		},
+		nil,
+		ec.marshalOTeamBlocker2ᚕᚖgithubᚗcomᚋvinodhalaharviᚋpurepulseᚋpkgᚋgraphqlᚋgraphᚋmodelᚐTeamBlockerᚄ,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_TeamWeeklyReport_teamBlockers(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TeamWeeklyReport",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "title":
+				return ec.fieldContext_TeamBlocker_title(ctx, field)
+			case "affectedUsers":
+				return ec.fieldContext_TeamBlocker_affectedUsers(ctx, field)
+			case "action":
+				return ec.fieldContext_TeamBlocker_action(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type TeamBlocker", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TeamWeeklyReport_recommendations(ctx context.Context, field graphql.CollectedField, obj *model.TeamWeeklyReport) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TeamWeeklyReport_recommendations,
+		func(ctx context.Context) (any, error) {
+			return obj.Recommendations, nil
+		},
+		nil,
+		ec.marshalOString2ᚕstringᚄ,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_TeamWeeklyReport_recommendations(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TeamWeeklyReport",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TeamWeeklyReport_memberCount(ctx context.Context, field graphql.CollectedField, obj *model.TeamWeeklyReport) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TeamWeeklyReport_memberCount,
+		func(ctx context.Context) (any, error) {
+			return obj.MemberCount, nil
+		},
+		nil,
+		ec.marshalNInt2int32,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TeamWeeklyReport_memberCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TeamWeeklyReport",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TeamWeeklyReport_generatedAt(ctx context.Context, field graphql.CollectedField, obj *model.TeamWeeklyReport) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_TeamWeeklyReport_generatedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.GeneratedAt, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_TeamWeeklyReport_generatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TeamWeeklyReport",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -2734,6 +3315,25 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "teamWeekly":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_teamWeekly(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
@@ -2742,6 +3342,133 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___schema(ctx, field)
 			})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var teamBlockerImplementors = []string{"TeamBlocker"}
+
+func (ec *executionContext) _TeamBlocker(ctx context.Context, sel ast.SelectionSet, obj *model.TeamBlocker) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, teamBlockerImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TeamBlocker")
+		case "title":
+			out.Values[i] = ec._TeamBlocker_title(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "affectedUsers":
+			out.Values[i] = ec._TeamBlocker_affectedUsers(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "action":
+			out.Values[i] = ec._TeamBlocker_action(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var teamWeeklyReportImplementors = []string{"TeamWeeklyReport"}
+
+func (ec *executionContext) _TeamWeeklyReport(ctx context.Context, sel ast.SelectionSet, obj *model.TeamWeeklyReport) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, teamWeeklyReportImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TeamWeeklyReport")
+		case "teamID":
+			out.Values[i] = ec._TeamWeeklyReport_teamID(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "weekStart":
+			out.Values[i] = ec._TeamWeeklyReport_weekStart(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "weekEnd":
+			out.Values[i] = ec._TeamWeeklyReport_weekEnd(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "executiveSummary":
+			out.Values[i] = ec._TeamWeeklyReport_executiveSummary(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "velocityAnalysis":
+			out.Values[i] = ec._TeamWeeklyReport_velocityAnalysis(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "collaborationNotes":
+			out.Values[i] = ec._TeamWeeklyReport_collaborationNotes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "teamBlockers":
+			out.Values[i] = ec._TeamWeeklyReport_teamBlockers(ctx, field, obj)
+		case "recommendations":
+			out.Values[i] = ec._TeamWeeklyReport_recommendations(ctx, field, obj)
+		case "memberCount":
+			out.Values[i] = ec._TeamWeeklyReport_memberCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "generatedAt":
+			out.Values[i] = ec._TeamWeeklyReport_generatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -3269,6 +3996,46 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 	return res
 }
 
+func (ec *executionContext) unmarshalNString2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNString2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNString2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNString2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNTeamBlocker2ᚖgithubᚗcomᚋvinodhalaharviᚋpurepulseᚋpkgᚋgraphqlᚋgraphᚋmodelᚐTeamBlocker(ctx context.Context, sel ast.SelectionSet, v *model.TeamBlocker) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._TeamBlocker(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNWin2ᚖgithubᚗcomᚋvinodhalaharviᚋpurepulseᚋpkgᚋgraphqlᚋgraphᚋmodelᚐWin(ctx context.Context, sel ast.SelectionSet, v *model.Win) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -3656,6 +4423,42 @@ func (ec *executionContext) marshalOInProgress2ᚕᚖgithubᚗcomᚋvinodhalahar
 	return ret
 }
 
+func (ec *executionContext) unmarshalOString2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNString2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOString2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNString2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalOString2ᚖstring(ctx context.Context, v any) (*string, error) {
 	if v == nil {
 		return nil, nil
@@ -3672,6 +4475,60 @@ func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel as
 	_ = ctx
 	res := graphql.MarshalString(*v)
 	return res
+}
+
+func (ec *executionContext) marshalOTeamBlocker2ᚕᚖgithubᚗcomᚋvinodhalaharviᚋpurepulseᚋpkgᚋgraphqlᚋgraphᚋmodelᚐTeamBlockerᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.TeamBlocker) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNTeamBlocker2ᚖgithubᚗcomᚋvinodhalaharviᚋpurepulseᚋpkgᚋgraphqlᚋgraphᚋmodelᚐTeamBlocker(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalOTeamWeeklyReport2ᚖgithubᚗcomᚋvinodhalaharviᚋpurepulseᚋpkgᚋgraphqlᚋgraphᚋmodelᚐTeamWeeklyReport(ctx context.Context, sel ast.SelectionSet, v *model.TeamWeeklyReport) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._TeamWeeklyReport(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOUserWeeklyReport2ᚖgithubᚗcomᚋvinodhalaharviᚋpurepulseᚋpkgᚋgraphqlᚋgraphᚋmodelᚐUserWeeklyReport(ctx context.Context, sel ast.SelectionSet, v *model.UserWeeklyReport) graphql.Marshaler {

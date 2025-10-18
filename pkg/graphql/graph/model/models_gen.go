@@ -20,6 +20,25 @@ type InProgress struct {
 type Query struct {
 }
 
+type TeamBlocker struct {
+	Title         string   `json:"title"`
+	AffectedUsers []string `json:"affectedUsers"`
+	Action        string   `json:"action"`
+}
+
+type TeamWeeklyReport struct {
+	TeamID             string         `json:"teamID"`
+	WeekStart          string         `json:"weekStart"`
+	WeekEnd            string         `json:"weekEnd"`
+	ExecutiveSummary   string         `json:"executiveSummary"`
+	VelocityAnalysis   string         `json:"velocityAnalysis"`
+	CollaborationNotes string         `json:"collaborationNotes"`
+	TeamBlockers       []*TeamBlocker `json:"teamBlockers,omitempty"`
+	Recommendations    []string       `json:"recommendations,omitempty"`
+	MemberCount        int32          `json:"memberCount"`
+	GeneratedAt        string         `json:"generatedAt"`
+}
+
 type UserWeeklyReport struct {
 	UserID      string        `json:"userID"`
 	Wins        []*Win        `json:"wins,omitempty"`
