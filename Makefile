@@ -123,8 +123,6 @@ test-metrics-refresh: ## Just refresh views
 	@echo "Views refreshed"
 
 
-
-
 test-metrics-full: ## Full diagnostic for weekly metrics
 	@echo "Running full weekly metrics diagnostic..."
 	@. ./.env && go run ./cmd/test-weekly-metrics/main.go
