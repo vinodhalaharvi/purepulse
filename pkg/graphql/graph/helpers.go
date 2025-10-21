@@ -27,57 +27,80 @@ type SimpleDailyActivity struct {
 // User Weekly Report Helpers
 
 func (r *queryResolver) fetchExistingReport(ctx context.Context, userID string, weekStart time.Time) (*model.UserWeeklyReport, error) {
+	log.Printf("DEBUG: Fetching report for user=%s, weekStart=%s", userID, weekStart.Format("2006-01-02"))
+
 	query := `
         SELECT 
             wins,
             in_progress,
             blocked,
-            notes,
+            executive_summary,
             generated_at
         FROM weekly_reports
         WHERE user_id = $1 
-        AND week_start = $2
+        AND week_start::date = $2::date
         ORDER BY generated_at DESC
         LIMIT 1
     `
 
 	var winsJSON, progressJSON, blockedJSON []byte
-	var notes sql.NullString
+	var executiveSummary sql.NullString
 	var generatedAt time.Time
 
 	err := r.DB.QueryRowContext(ctx, query, userID, weekStart).Scan(
 		&winsJSON,
 		&progressJSON,
 		&blockedJSON,
-		&notes,
+		&executiveSummary,
 		&generatedAt,
 	)
 
 	if err == sql.ErrNoRows {
-		return nil, nil // No existing report
+		log.Printf("DEBUG: No report found for user=%s, weekStart=%s", userID, weekStart.Format("2006-01-02"))
+		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		log.Printf("ERROR: Failed to query report: %v", err)
+		return nil, fmt.Errorf("failed to fetch report: %w", err)
 	}
+
+	log.Printf("DEBUG: Found report - blocked JSON: %s", string(blockedJSON))
 
 	// Parse the JSON fields
 	var wins []analytics.WinItem
 	var inProgress []analytics.ProgressItem
 	var blocked []analytics.BlockedItem
 
-	json.Unmarshal(winsJSON, &wins)
-	json.Unmarshal(progressJSON, &inProgress)
-	json.Unmarshal(blockedJSON, &blocked)
+	if len(winsJSON) > 0 {
+		if err := json.Unmarshal(winsJSON, &wins); err != nil {
+			log.Printf("ERROR: Failed to unmarshal wins: %v", err)
+		}
+	}
+
+	if len(progressJSON) > 0 {
+		if err := json.Unmarshal(progressJSON, &inProgress); err != nil {
+			log.Printf("ERROR: Failed to unmarshal inProgress: %v", err)
+		}
+	}
+
+	if len(blockedJSON) > 0 {
+		if err := json.Unmarshal(blockedJSON, &blocked); err != nil {
+			log.Printf("ERROR: Failed to unmarshal blocked: %v", err)
+		}
+	}
+
+	log.Printf("DEBUG: Parsed %d wins, %d in_progress, %d blocked items", len(wins), len(inProgress), len(blocked))
 
 	// Convert to GraphQL model
 	report := &model.UserWeeklyReport{
 		UserID:      userID,
-		Wins:        make([]*model.Win, 0, len(wins)),
-		InProgress:  make([]*model.InProgress, 0, len(inProgress)),
-		Blocked:     make([]*model.Blocked, 0, len(blocked)),
+		Wins:        make([]*model.Win, 0),
+		InProgress:  make([]*model.InProgress, 0),
+		Blocked:     make([]*model.Blocked, 0),
 		GeneratedAt: generatedAt.Format(time.RFC3339),
 	}
 
+	// Convert wins
 	for _, w := range wins {
 		report.Wins = append(report.Wins, &model.Win{
 			Title:       w.Title,
@@ -86,6 +109,7 @@ func (r *queryResolver) fetchExistingReport(ctx context.Context, userID string, 
 		})
 	}
 
+	// Convert in progress items
 	for _, p := range inProgress {
 		var blocker, dueDate *string
 		if p.Blocker != "" {
@@ -103,6 +127,7 @@ func (r *queryResolver) fetchExistingReport(ctx context.Context, userID string, 
 		})
 	}
 
+	// Convert blocked items
 	for _, b := range blocked {
 		report.Blocked = append(report.Blocked, &model.Blocked{
 			Title:           b.Title,
@@ -113,10 +138,12 @@ func (r *queryResolver) fetchExistingReport(ctx context.Context, userID string, 
 		})
 	}
 
-	if notes.Valid {
-		report.Notes = &notes.String
+	// Map executive_summary to notes field
+	if executiveSummary.Valid {
+		report.Notes = &executiveSummary.String
 	}
 
+	log.Printf("DEBUG: Returning report with %d blocked items for user %s", len(report.Blocked), userID)
 	return report, nil
 }
 
