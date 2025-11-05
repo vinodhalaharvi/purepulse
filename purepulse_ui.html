@@ -1,0 +1,1578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PurePulse GraphQL Pipeline Builder</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --slack-color: #4A154B;
+            --github-color: #181717;
+            --jira-color: #0052CC;
+            --zoom-color: #2D8CFF;
+            --confluence-color: #172B4D;
+        }
+        
+        body {
+            background: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow-x: hidden;
+        }
+        
+        .main-container {
+            max-width: 1800px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        
+        .page-header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 30px 40px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+        }
+        
+        .page-header h1 {
+            margin: 0 0 8px 0;
+            font-weight: 700;
+            font-size: 28px;
+        }
+        
+        .page-header p {
+            margin: 0;
+            opacity: 0.9;
+        }
+        
+        /* Source Palette - Compact Grid */
+        .source-palette {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            position: sticky;
+            top: 20px;
+        }
+        
+        .palette-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #64748b;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+        
+        .source-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        
+        .source-icon {
+            aspect-ratio: 1;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            transition: all 0.2s;
+            border: 2px solid #e2e8f0;
+            background: white;
+            padding: 8px;
+        }
+        
+        .source-icon:active {
+            cursor: grabbing;
+        }
+        
+        .source-icon:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+        }
+        
+        .source-icon i {
+            font-size: 28px;
+            color: white;
+            margin-bottom: 4px;
+        }
+        
+        .source-icon-inner {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 6px;
+        }
+        
+        .source-name {
+            font-size: 10px;
+            font-weight: 600;
+            color: #1e293b;
+            text-align: center;
+        }
+        
+        /* Target Selection Dropdown */
+        .target-palette {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            margin-top: 16px;
+        }
+        
+        /* Aggregation Controls */
+        .aggregation-controls {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            margin-top: 16px;
+        }
+        
+        .control-group {
+            margin-bottom: 16px;
+        }
+        
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+        
+        .control-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #64748b;
+            margin-bottom: 8px;
+            font-weight: 700;
+            display: block;
+        }
+        
+        .btn-group-custom {
+            display: flex;
+            gap: 6px;
+        }
+        
+        .btn-agg {
+            flex: 1;
+            padding: 8px 12px;
+            border: 2px solid #e2e8f0;
+            background: white;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #64748b;
+        }
+        
+        .btn-agg:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+        
+        .btn-agg.active {
+            background: #667eea;
+            border-color: #667eea;
+            color: white;
+        }
+        
+        .date-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        .date-input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .date-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        /* Canvas */
+        .builder-canvas {
+            background: 
+                repeating-linear-gradient(0deg, #f1f5f9 0px, #f1f5f9 1px, transparent 1px, transparent 20px),
+                repeating-linear-gradient(90deg, #f1f5f9 0px, #f1f5f9 1px, transparent 1px, transparent 20px);
+            background-size: 20px 20px;
+            border: 2px dashed #cbd5e1;
+            border-radius: 16px;
+            min-height: 500px;
+            position: relative;
+            padding: 30px;
+        }
+        
+        .canvas-section {
+            margin-bottom: 24px;
+        }
+        
+        .canvas-section:last-child {
+            margin-bottom: 0;
+        }
+        
+        .canvas-section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .canvas-section-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: white;
+        }
+        
+        .canvas-section-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1e293b;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .canvas-section-count {
+            font-size: 12px;
+            color: #64748b;
+            background: #f1f5f9;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        
+        .canvas-empty-state {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #94a3b8;
+            font-size: 16px;
+            font-weight: 500;
+            text-align: center;
+            pointer-events: none;
+        }
+        
+        .builder-canvas.drag-over {
+            border-color: #667eea;
+            background-color: rgba(102, 126, 234, 0.05);
+        }
+        
+        /* Source Node */
+        .source-node {
+            background: white;
+            border: 3px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .source-node:hover {
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        
+        .source-node.selected {
+            border-color: #667eea;
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+        }
+        
+        .source-node-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .source-node-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+        }
+        
+        .source-node-info {
+            flex: 1;
+        }
+        
+        .source-node-title {
+            font-weight: 700;
+            font-size: 16px;
+            color: #1e293b;
+            margin-bottom: 2px;
+        }
+        
+        .source-node-subtitle {
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        .source-node-remove {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: #fee2e2;
+            color: #dc2626;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .source-node-remove:hover {
+            background: #dc2626;
+            color: white;
+        }
+        
+        .property-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        
+        .property-chip {
+            padding: 6px 12px;
+            background: #f1f5f9;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #475569;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .property-chip.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        /* Target Node */
+        .target-node {
+            background: white;
+            border: 3px solid #f59e0b;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .target-node:hover {
+            box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .target-node-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .target-node-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+        }
+        
+        .target-node-info {
+            flex: 1;
+        }
+        
+        .target-node-title {
+            font-weight: 700;
+            font-size: 16px;
+            color: #1e293b;
+            margin-bottom: 2px;
+        }
+        
+        .target-node-subtitle {
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        .target-node-remove {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: #fee2e2;
+            color: #dc2626;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .target-node-remove:hover {
+            background: #dc2626;
+            color: white;
+        }
+        
+        .config-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .config-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #475569;
+        }
+        
+        .config-item-label {
+            font-weight: 600;
+            min-width: 80px;
+        }
+        
+        .config-item-value {
+            color: #f59e0b;
+            font-family: 'SF Mono', monospace;
+        }
+        
+        /* GraphQL Output */
+        .graphql-output-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            margin-top: 20px;
+        }
+        
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .output-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1e293b;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .copy-btn {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .copy-btn:hover {
+            background: #5568d3;
+        }
+        
+        .copy-btn.copied {
+            background: #10b981;
+        }
+        
+        .graphql-code {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 12px;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        
+        .gql-keyword { color: #c792ea; font-weight: 600; }
+        .gql-field { color: #82aaff; }
+        .gql-string { color: #c3e88d; }
+        .gql-number { color: #f78c6c; }
+        .gql-boolean { color: #ff5370; }
+        .gql-punctuation { color: #89ddff; }
+        .gql-comment { color: #546e7a; font-style: italic; }
+        
+        /* Property Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: #f1f5f9;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #64748b;
+        }
+        
+        .modal-close:hover {
+            background: #e2e8f0;
+            color: #1e293b;
+        }
+        
+        .property-option {
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .property-option:hover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+        
+        .property-option.selected {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+        
+        .property-checkbox {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #cbd5e1;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+        }
+        
+        .property-option.selected .property-checkbox {
+            background: #667eea;
+            border-color: #667eea;
+        }
+        
+        .property-info {
+            flex: 1;
+        }
+        
+        .property-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: #1e293b;
+        }
+        
+        .property-desc {
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        /* Config Input in Modal */
+        .config-input-group {
+            margin-bottom: 16px;
+        }
+        
+        .config-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 6px;
+            display: block;
+        }
+        
+        .config-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: 'SF Mono', monospace;
+        }
+        
+        .config-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script type="text/babel">
+        const { useState } = React;
+        
+        // ============================================================================
+        // MONOID DEFINITIONS (used internally for composability)
+        // ============================================================================
+        
+        const PropertySetMonoid = {
+            empty: new Set(),
+            combine: (a, b) => new Set([...a, ...b])
+        };
+        
+        const SourceCollectionMonoid = {
+            empty: [],
+            combine: (a, b) => [...a, ...b]
+        };
+        
+        // ============================================================================
+        // DATA SOURCES CONFIGURATION
+        // ============================================================================
+        
+        const SOURCES = [
+            {
+                id: 'slack',
+                name: 'Slack',
+                icon: 'fa-slack',
+                color: 'var(--slack-color)',
+                availableProperties: [
+                    { key: 'slackMessages', name: 'Messages', desc: 'Message count' },
+                    { key: 'slackChannels', name: 'Channels', desc: 'Active channels' },
+                    { key: 'slackReactions', name: 'Reactions', desc: 'Reaction count' },
+                    { key: 'slackThreadReplies', name: 'Thread Replies', desc: 'Thread participation' },
+                    { key: 'slackFilesShared', name: 'Files Shared', desc: 'Files uploaded' }
+                ]
+            },
+            {
+                id: 'github',
+                name: 'GitHub',
+                icon: 'fa-github',
+                color: 'var(--github-color)',
+                availableProperties: [
+                    { key: 'githubCommits', name: 'Commits', desc: 'Commit count' },
+                    { key: 'githubPRs', name: 'Pull Requests', desc: 'PRs opened' },
+                    { key: 'githubPRsReviewed', name: 'PRs Reviewed', desc: 'Reviews completed' },
+                    { key: 'githubIssues', name: 'Issues', desc: 'Issues created' },
+                    { key: 'githubComments', name: 'Comments', desc: 'Comments made' },
+                    { key: 'githubLinesAdded', name: 'Lines Added', desc: 'Code additions' },
+                    { key: 'githubLinesDeleted', name: 'Lines Deleted', desc: 'Code deletions' }
+                ]
+            },
+            {
+                id: 'jira',
+                name: 'Jira',
+                icon: 'fa-jira',
+                color: 'var(--jira-color)',
+                availableProperties: [
+                    { key: 'jiraIssuesCreated', name: 'Issues Created', desc: 'New tickets' },
+                    { key: 'jiraIssuesCompleted', name: 'Issues Completed', desc: 'Closed tickets' },
+                    { key: 'jiraStoryPoints', name: 'Story Points', desc: 'Points completed' },
+                    { key: 'jiraComments', name: 'Comments', desc: 'Comments added' },
+                    { key: 'jiraTransitions', name: 'Transitions', desc: 'Status changes' }
+                ]
+            },
+            {
+                id: 'zoom',
+                name: 'Zoom',
+                icon: 'fa-video',
+                color: 'var(--zoom-color)',
+                availableProperties: [
+                    { key: 'zoomMeetings', name: 'Meetings', desc: 'Meeting count' },
+                    { key: 'zoomMinutes', name: 'Minutes', desc: 'Total duration' },
+                    { key: 'zoomWebinars', name: 'Webinars', desc: 'Webinar count' },
+                    { key: 'zoomRecordings', name: 'Recordings', desc: 'Recordings made' }
+                ]
+            },
+            {
+                id: 'confluence',
+                name: 'Confluence',
+                icon: 'fa-confluence',
+                color: 'var(--confluence-color)',
+                availableProperties: [
+                    { key: 'confluencePages', name: 'Pages Created', desc: 'New pages' },
+                    { key: 'confluenceEdits', name: 'Edits', desc: 'Page modifications' },
+                    { key: 'confluenceComments', name: 'Comments', desc: 'Comments added' },
+                    { key: 'confluenceAttachments', name: 'Attachments', desc: 'Files attached' }
+                ]
+            }
+        ];
+        
+        const TARGETS = [
+            {
+                id: 'slack-alert',
+                name: 'Slack Alert',
+                icon: 'fa-slack',
+                color: 'var(--slack-color)',
+                type: 'alert',
+                config: {
+                    channel: '',
+                    mention: '',
+                    threshold: ''
+                }
+            },
+            {
+                id: 'webhook',
+                name: 'Webhook',
+                icon: 'fa-bolt',
+                color: '#6366F1',
+                type: 'alert',
+                config: {
+                    url: '',
+                    method: 'POST',
+                    headers: ''
+                }
+            }
+        ];
+        
+        // ============================================================================
+        // GRAPHQL GENERATION
+        // ============================================================================
+        
+        const sourceToQueryFragment = (source, scope, aggregation, startDate, endDate, userID, teamID) => {
+            const queryType = scope === 'user' ? 'userWeekly' : 'teamWeekly';
+            const idArg = scope === 'user' ? `userID: "${userID}"` : `teamID: "${teamID}"`;
+            
+            const allProperties = [
+                'userID',
+                'wins { title description impact }',
+                'inProgress { title percentComplete blocker dueDate }',
+                'blocked { title blockedBy durationHours impactLevel suggestedAction }',
+                'notes',
+                'generatedAt'
+            ];
+            
+            if (scope === 'team') {
+                return `  ${queryType}(
+    ${idArg}
+    weekStart: "${startDate}"
+    weekEnd: "${endDate}"
+  ) {
+    teamID
+    weekStart
+    weekEnd
+    executiveSummary
+    velocityAnalysis
+    collaborationNotes
+    teamBlockers {
+      title
+      affectedUsers
+      action
+    }
+    recommendations
+    memberCount
+    generatedAt
+  }`;
+            }
+            
+            const selectedProps = source.selectedProperties.size > 0
+                ? allProperties
+                : ['userID', 'generatedAt'];
+            
+            return `  ${queryType}(
+    ${idArg}
+    weekStart: "${startDate}"
+    weekEnd: "${endDate}"
+  ) {
+    ${selectedProps.join('\n    ')}
+  }`;
+        };
+        
+        const generateGraphQLQuery = (sources, targets, scope, aggregation, startDate, endDate, userID, teamID) => {
+            if (sources.length === 0) {
+                return '# Drag sources to the canvas to build your query';
+            }
+            
+            const queryName = `Fetch${scope === 'user' ? 'User' : 'Team'}${aggregation}Report`;
+            
+            const fragments = sources.map(source => 
+                sourceToQueryFragment(source, scope, aggregation, startDate, endDate, userID, teamID)
+            );
+            
+            const uniqueFragments = [...new Set(fragments)];
+            
+            let query = `query ${queryName} {\n${uniqueFragments.join('\n')}\n}`;
+            
+            if (targets.length > 0) {
+                const targetMutations = targets.map(target => {
+                    if (target.id === 'slack-alert') {
+                        return `  sendSlackAlert(
+    channel: "${target.config.channel || '#alerts'}"
+    mention: "${target.config.mention || ''}"
+    threshold: "${target.config.threshold || ''}"
+    data: $reportData
+  ) {
+    success
+    messageId
+  }`;
+                    } else if (target.id === 'webhook') {
+                        return `  triggerWebhook(
+    url: "${target.config.url || ''}"
+    method: "${target.config.method || 'POST'}"
+    headers: ${target.config.headers || '{}'}
+    data: $reportData
+  ) {
+    success
+    statusCode
+  }`;
+                    }
+                    return '';
+                }).filter(Boolean);
+                
+                if (targetMutations.length > 0) {
+                    query += `\n\nmutation SendAlerts($reportData: JSON!) {\n${targetMutations.join('\n')}\n}`;
+                }
+            }
+            
+            return query;
+        };
+        
+        // ============================================================================
+        // REACT COMPONENTS
+        // ============================================================================
+        
+        const SourcePalette = ({ onDragStart }) => {
+            return (
+                <div className="source-palette">
+                    <div className="palette-title">Data Sources</div>
+                    <div className="source-grid">
+                        {SOURCES.map(source => (
+                            <div
+                                key={source.id}
+                                className="source-icon"
+                                draggable
+                                onDragStart={(e) => onDragStart(e, source, 'source')}
+                            >
+                                <div 
+                                    className="source-icon-inner" 
+                                    style={{ background: source.color }}
+                                >
+                                    <i className={`fab ${source.icon}`}></i>
+                                </div>
+                                <div className="source-name">{source.name}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+        
+        const TargetPalette = ({ onDragStart }) => {
+            return (
+                <div className="target-palette">
+                    <div className="palette-title">Alert Targets</div>
+                    <div className="source-grid">
+                        {TARGETS.map(target => (
+                            <div
+                                key={target.id}
+                                className="source-icon"
+                                draggable
+                                onDragStart={(e) => onDragStart(e, target, 'target')}
+                            >
+                                <div 
+                                    className="source-icon-inner" 
+                                    style={{ background: target.color }}
+                                >
+                                    <i className={`fas ${target.icon}`}></i>
+                                </div>
+                                <div className="source-name">{target.name}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+        
+        const AggregationControls = ({ 
+            scope, setScope, 
+            aggregation, setAggregation,
+            startDate, setStartDate,
+            endDate, setEndDate,
+            userID, setUserID,
+            teamID, setTeamID
+        }) => {
+            return (
+                <div className="aggregation-controls">
+                    <div className="control-group">
+                        <label className="control-label">Scope</label>
+                        <div className="btn-group-custom">
+                            <button 
+                                className={`btn-agg ${scope === 'user' ? 'active' : ''}`}
+                                onClick={() => setScope('user')}
+                            >
+                                <i className="fas fa-user"></i> User
+                            </button>
+                            <button 
+                                className={`btn-agg ${scope === 'team' ? 'active' : ''}`}
+                                onClick={() => setScope('team')}
+                            >
+                                <i className="fas fa-users"></i> Team
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div className="control-group">
+                        <label className="control-label">Period</label>
+                        <div className="btn-group-custom">
+                            <button 
+                                className={`btn-agg ${aggregation === 'Weekly' ? 'active' : ''}`}
+                                onClick={() => setAggregation('Weekly')}
+                            >
+                                <i className="fas fa-calendar-week"></i> Weekly
+                            </button>
+                            <button 
+                                className={`btn-agg ${aggregation === 'Monthly' ? 'active' : ''}`}
+                                onClick={() => setAggregation('Monthly')}
+                            >
+                                <i className="fas fa-calendar-alt"></i> Monthly
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div className="control-group">
+                        <label className="control-label">Date Range</label>
+                        <div className="date-input-group">
+                            <input 
+                                type="date" 
+                                className="date-input"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                            />
+                            <input 
+                                type="date" 
+                                className="date-input"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    
+                    {scope === 'user' && (
+                        <div className="control-group">
+                            <label className="control-label">User ID</label>
+                            <input 
+                                type="text" 
+                                className="date-input"
+                                placeholder="user-123"
+                                value={userID}
+                                onChange={(e) => setUserID(e.target.value)}
+                            />
+                        </div>
+                    )}
+                    
+                    {scope === 'team' && (
+                        <div className="control-group">
+                            <label className="control-label">Team ID</label>
+                            <input 
+                                type="text" 
+                                className="date-input"
+                                placeholder="team-456"
+                                value={teamID}
+                                onChange={(e) => setTeamID(e.target.value)}
+                            />
+                        </div>
+                    )}
+                </div>
+            );
+        };
+        
+        const SourceNode = ({ source, onRemove, onDoubleClick, selected }) => {
+            return (
+                <div 
+                    className={`source-node ${selected ? 'selected' : ''}`}
+                    onDoubleClick={onDoubleClick}
+                >
+                    <div className="source-node-header">
+                        <div 
+                            className="source-node-icon"
+                            style={{ background: source.color }}
+                        >
+                            <i className={`fab ${source.icon}`}></i>
+                        </div>
+                        <div className="source-node-info">
+                            <div className="source-node-title">{source.name}</div>
+                            <div className="source-node-subtitle">
+                                {source.selectedProperties.size} properties selected
+                            </div>
+                        </div>
+                        <button 
+                            className="source-node-remove"
+                            onClick={onRemove}
+                        >
+                            <i className="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    {source.selectedProperties.size > 0 && (
+                        <div className="property-list">
+                            {Array.from(source.selectedProperties).map(propKey => {
+                                const prop = source.availableProperties.find(p => p.key === propKey);
+                                return prop ? (
+                                    <div key={propKey} className="property-chip active">
+                                        {prop.name}
+                                    </div>
+                                ) : null;
+                            })}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+        
+        const TargetNode = ({ target, onRemove, onDoubleClick, selected }) => {
+            const configEntries = Object.entries(target.config).filter(([_, value]) => value);
+            
+            return (
+                <div 
+                    className={`target-node ${selected ? 'selected' : ''}`}
+                    onDoubleClick={onDoubleClick}
+                >
+                    <div className="target-node-header">
+                        <div 
+                            className="target-node-icon"
+                            style={{ background: target.color }}
+                        >
+                            <i className={`fas ${target.icon}`}></i>
+                        </div>
+                        <div className="target-node-info">
+                            <div className="target-node-title">{target.name}</div>
+                            <div className="target-node-subtitle">
+                                Alert Target • {configEntries.length} configured
+                            </div>
+                        </div>
+                        <button 
+                            className="target-node-remove"
+                            onClick={onRemove}
+                        >
+                            <i className="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    {configEntries.length > 0 && (
+                        <div className="config-list">
+                            {configEntries.map(([key, value]) => (
+                                <div key={key} className="config-item">
+                                    <span className="config-item-label">{key}:</span>
+                                    <span className="config-item-value">{value}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+        
+        const PropertyModal = ({ item, itemType, onClose, onToggleProperty, onUpdateConfig }) => {
+            if (!item) return null;
+            
+            const [localConfig, setLocalConfig] = useState(item.config || {});
+            
+            const handleConfigChange = (key, value) => {
+                const newConfig = { ...localConfig, [key]: value };
+                setLocalConfig(newConfig);
+                if (onUpdateConfig) {
+                    onUpdateConfig(item.id, newConfig);
+                }
+            };
+            
+            return (
+                <div className="modal-overlay" onClick={onClose}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <div className="modal-title">
+                                <i className={`${itemType === 'target' ? 'fas' : 'fab'} ${item.icon}`}></i> {item.name} {itemType === 'target' ? 'Configuration' : 'Properties'}
+                            </div>
+                            <button className="modal-close" onClick={onClose}>
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        {itemType === 'source' && (
+                            <div>
+                                {item.availableProperties.map(prop => {
+                                    const isSelected = item.selectedProperties.has(prop.key);
+                                    return (
+                                        <div 
+                                            key={prop.key}
+                                            className={`property-option ${isSelected ? 'selected' : ''}`}
+                                            onClick={() => onToggleProperty(item.id, prop.key)}
+                                        >
+                                            <div className="property-checkbox">
+                                                {isSelected && <i className="fas fa-check"></i>}
+                                            </div>
+                                            <div className="property-info">
+                                                <div className="property-name">{prop.name}</div>
+                                                <div className="property-desc">{prop.desc}</div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        
+                        {itemType === 'target' && item.id === 'slack-alert' && (
+                            <div>
+                                <div className="config-input-group">
+                                    <label className="config-label">Channel ID</label>
+                                    <input 
+                                        type="text"
+                                        className="config-input"
+                                        placeholder="#team-alerts"
+                                        value={localConfig.channel || ''}
+                                        onChange={(e) => handleConfigChange('channel', e.target.value)}
+                                    />
+                                </div>
+                                <div className="config-input-group">
+                                    <label className="config-label">Mention</label>
+                                    <input 
+                                        type="text"
+                                        className="config-input"
+                                        placeholder="@team or @channel"
+                                        value={localConfig.mention || ''}
+                                        onChange={(e) => handleConfigChange('mention', e.target.value)}
+                                    />
+                                </div>
+                                <div className="config-input-group">
+                                    <label className="config-label">Threshold</label>
+                                    <input 
+                                        type="text"
+                                        className="config-input"
+                                        placeholder="e.g., commits < 5"
+                                        value={localConfig.threshold || ''}
+                                        onChange={(e) => handleConfigChange('threshold', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                        
+                        {itemType === 'target' && item.id === 'webhook' && (
+                            <div>
+                                <div className="config-input-group">
+                                    <label className="config-label">Webhook URL</label>
+                                    <input 
+                                        type="text"
+                                        className="config-input"
+                                        placeholder="https://hooks.example.com/webhook"
+                                        value={localConfig.url || ''}
+                                        onChange={(e) => handleConfigChange('url', e.target.value)}
+                                    />
+                                </div>
+                                <div className="config-input-group">
+                                    <label className="config-label">HTTP Method</label>
+                                    <input 
+                                        type="text"
+                                        className="config-input"
+                                        placeholder="POST"
+                                        value={localConfig.method || 'POST'}
+                                        onChange={(e) => handleConfigChange('method', e.target.value)}
+                                    />
+                                </div>
+                                <div className="config-input-group">
+                                    <label className="config-label">Headers (JSON)</label>
+                                    <input 
+                                        type="text"
+                                        className="config-input"
+                                        placeholder='{"Authorization": "Bearer token"}'
+                                        value={localConfig.headers || ''}
+                                        onChange={(e) => handleConfigChange('headers', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+        
+        const GraphQLOutput = ({ query }) => {
+            const [copied, setCopied] = useState(false);
+            
+            const copyToClipboard = () => {
+                navigator.clipboard.writeText(query);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            };
+            
+            const highlightQuery = (code) => {
+                // Escape HTML first
+                let result = code
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+                
+                // Protect strings
+                const strings = [];
+                result = result.replace(/"[^"]*"/g, (match) => {
+                    const id = `__STR${strings.length}__`;
+                    strings.push(match);
+                    return id;
+                });
+                
+                // Highlight syntax
+                result = result.replace(/\bquery\b/g, '<span class="gql-keyword">query</span>');
+                result = result.replace(/\bmutation\b/g, '<span class="gql-keyword">mutation</span>');
+                result = result.replace(/\b([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '<span class="gql-field">$1</span>:');
+                result = result.replace(/\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g, '<span class="gql-field">$1</span>(');
+                result = result.replace(/\b(\d+)\b/g, '<span class="gql-number">$1</span>');
+                result = result.replace(/\b(true|false)\b/g, '<span class="gql-boolean">$1</span>');
+                result = result.replace(/([{}[\]():,])/g, '<span class="gql-punctuation">$1</span>');
+                result = result.replace(/(#[^\n]*)/g, '<span class="gql-comment">$1</span>');
+                
+                // Restore strings with color
+                strings.forEach((str, i) => {
+                    result = result.replace(`__STR${i}__`, `<span class="gql-string">${str}</span>`);
+                });
+                
+                return result;
+            };
+            
+            return (
+                <div className="graphql-output-panel">
+                    <div className="output-header">
+                        <div className="output-title">Generated GraphQL Query</div>
+                        <button 
+                            className={`copy-btn ${copied ? 'copied' : ''}`}
+                            onClick={copyToClipboard}
+                        >
+                            <i className={`fas ${copied ? 'fa-check' : 'fa-copy'}`}></i> 
+                            {' '}{copied ? 'Copied!' : 'Copy'}
+                        </button>
+                    </div>
+                    <div 
+                        className="graphql-code"
+                        dangerouslySetInnerHTML={{ __html: highlightQuery(query) }}
+                    />
+                </div>
+            );
+        };
+        
+        // ============================================================================
+        // MAIN APP
+        // ============================================================================
+        
+        const App = () => {
+            const [sources, setSources] = useState([]);
+            const [targets, setTargets] = useState([]);
+            const [selectedSourceId, setSelectedSourceId] = useState(null);
+            const [modalItem, setModalItem] = useState(null);
+            const [modalType, setModalType] = useState(null);
+            const [dragOver, setDragOver] = useState(false);
+            
+            const [scope, setScope] = useState('user');
+            const [aggregation, setAggregation] = useState('Weekly');
+            const [startDate, setStartDate] = useState('2025-01-20');
+            const [endDate, setEndDate] = useState('2025-01-26');
+            const [userID, setUserID] = useState('user-123');
+            const [teamID, setTeamID] = useState('team-456');
+            
+            const graphQLQuery = generateGraphQLQuery(
+                sources,
+                targets,
+                scope, 
+                aggregation, 
+                startDate, 
+                endDate,
+                userID,
+                teamID
+            );
+            
+            const handleDragStart = (e, item, type) => {
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setData('item', JSON.stringify({ ...item, dragType: type }));
+            };
+            
+            const handleDragOver = (e) => {
+                e.preventDefault();
+                setDragOver(true);
+            };
+            
+            const handleDragLeave = () => {
+                setDragOver(false);
+            };
+            
+            const handleDrop = (e) => {
+                e.preventDefault();
+                setDragOver(false);
+                
+                const itemData = JSON.parse(e.dataTransfer.getData('item'));
+                const { dragType, ...item } = itemData;
+                
+                if (dragType === 'source') {
+                    if (sources.find(s => s.id === item.id)) return;
+                    
+                    const newSource = {
+                        ...item,
+                        selectedProperties: PropertySetMonoid.empty,
+                        timestamp: Date.now()
+                    };
+                    
+                    setSources(prev => SourceCollectionMonoid.combine(prev, [newSource]));
+                } else if (dragType === 'target') {
+                    if (targets.find(t => t.id === item.id)) return;
+                    
+                    const newTarget = {
+                        ...item,
+                        timestamp: Date.now()
+                    };
+                    
+                    setTargets(prev => [...prev, newTarget]);
+                }
+            };
+            
+            const handleAddTarget = (target) => {
+                if (targets.find(t => t.id === target.id)) return;
+                
+                const newTarget = {
+                    ...target,
+                    timestamp: Date.now()
+                };
+                
+                setTargets(prev => [...prev, newTarget]);
+            };
+            
+            const handleRemoveSource = (sourceId) => {
+                setSources(prev => prev.filter(s => s.id !== sourceId));
+            };
+            
+            const handleRemoveTarget = (targetId) => {
+                setTargets(prev => prev.filter(t => t.id !== targetId));
+            };
+            
+            const handleDoubleClickSource = (source) => {
+                setModalItem(source);
+                setModalType('source');
+            };
+            
+            const handleDoubleClickTarget = (target) => {
+                setModalItem(target);
+                setModalType('target');
+            };
+            
+            const handleToggleProperty = (sourceId, propertyKey) => {
+                setSources(prev => prev.map(source => {
+                    if (source.id !== sourceId) return source;
+                    
+                    const newProps = new Set(source.selectedProperties);
+                    if (newProps.has(propertyKey)) {
+                        newProps.delete(propertyKey);
+                    } else {
+                        newProps.add(propertyKey);
+                    }
+                    
+                    return {
+                        ...source,
+                        selectedProperties: newProps
+                    };
+                }));
+                
+                setModalItem(prev => {
+                    if (!prev || prev.id !== sourceId) return prev;
+                    const newProps = new Set(prev.selectedProperties);
+                    if (newProps.has(propertyKey)) {
+                        newProps.delete(propertyKey);
+                    } else {
+                        newProps.add(propertyKey);
+                    }
+                    return { ...prev, selectedProperties: newProps };
+                });
+            };
+            
+            const handleUpdateTargetConfig = (targetId, config) => {
+                setTargets(prev => prev.map(target => {
+                    if (target.id !== targetId) return target;
+                    return { ...target, config };
+                }));
+            };
+            
+            return (
+                <div className="main-container">
+                    <div className="page-header">
+                        <h1>
+                            <i className="fas fa-project-diagram"></i> PurePulse GraphQL Builder
+                        </h1>
+                        <p>Drag sources to build queries • Configure properties • Generate alerts</p>
+                    </div>
+                    
+                    <div className="row">
+                        <div className="col-md-3">
+                            <SourcePalette onDragStart={handleDragStart} />
+                            <TargetPalette onDragStart={handleDragStart} />
+                            <AggregationControls 
+                                scope={scope}
+                                setScope={setScope}
+                                aggregation={aggregation}
+                                setAggregation={setAggregation}
+                                startDate={startDate}
+                                setStartDate={setStartDate}
+                                endDate={endDate}
+                                setEndDate={setEndDate}
+                                userID={userID}
+                                setUserID={setUserID}
+                                teamID={teamID}
+                                setTeamID={setTeamID}
+                            />
+                        </div>
+                        
+                        <div className="col-md-9">
+                            <div 
+                                className={`builder-canvas ${dragOver ? 'drag-over' : ''}`}
+                                onDragOver={handleDragOver}
+                                onDragLeave={handleDragLeave}
+                                onDrop={handleDrop}
+                            >
+                                {sources.length === 0 && targets.length === 0 && (
+                                    <div className="canvas-empty-state">
+                                        <i className="fas fa-hand-pointer" style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.3 }}></i>
+                                        <br />
+                                        Drag sources and targets here
+                                        <br />
+                                        <small>Double-click to configure</small>
+                                    </div>
+                                )}
+                                
+                                {sources.length > 0 && (
+                                    <div className="canvas-section">
+                                        <div className="canvas-section-header">
+                                            <div 
+                                                className="canvas-section-icon"
+                                                style={{ background: 'var(--primary-gradient)' }}
+                                            >
+                                                <i className="fas fa-database"></i>
+                                            </div>
+                                            <div className="canvas-section-title">Data Sources</div>
+                                            <div className="canvas-section-count">{sources.length}</div>
+                                        </div>
+                                        {sources.map(source => (
+                                            <SourceNode
+                                                key={source.id}
+                                                source={source}
+                                                selected={selectedSourceId === source.id}
+                                                onRemove={() => handleRemoveSource(source.id)}
+                                                onDoubleClick={() => handleDoubleClickSource(source)}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                                
+                                {targets.length > 0 && (
+                                    <div className="canvas-section">
+                                        <div className="canvas-section-header">
+                                            <div 
+                                                className="canvas-section-icon"
+                                                style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)' }}
+                                            >
+                                                <i className="fas fa-bell"></i>
+                                            </div>
+                                            <div className="canvas-section-title">Alert Targets</div>
+                                            <div className="canvas-section-count">{targets.length}</div>
+                                        </div>
+                                        {targets.map(target => (
+                                            <TargetNode
+                                                key={target.id}
+                                                target={target}
+                                                onRemove={() => handleRemoveTarget(target.id)}
+                                                onDoubleClick={() => handleDoubleClickTarget(target)}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <GraphQLOutput query={graphQLQuery} />
+                        </div>
+                    </div>
+                    
+                    {modalItem && (
+                        <PropertyModal
+                            item={modalItem}
+                            itemType={modalType}
+                            onClose={() => {
+                                setModalItem(null);
+                                setModalType(null);
+                            }}
+                            onToggleProperty={handleToggleProperty}
+                            onUpdateConfig={handleUpdateTargetConfig}
+                        />
+                    )}
+                </div>
+            );
+        };
+        
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
